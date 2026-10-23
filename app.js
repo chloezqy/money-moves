@@ -1,255 +1,232 @@
-import { INITIAL_GOAL, spending, transactions, money, limits } from './data.js';
+import { INITIAL_GOAL, spending, transactions, monthlyDining, money, limits } from './data.js';
 import { simulate, suggestPlan, validateAdjustments } from './plan-engine.js';
-import { icon, landscape } from './icons.js';
+import { icon } from './icons.js';
 
 const $ = (selector, root = document) => root.querySelector(selector);
-const escape = value => String(value).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+const esc = value => String(value).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
 const read = () => { try { return JSON.parse(localStorage.getItem('money-moves-v1') || '{}'); } catch { return {}; } };
 const saved = read();
 const state = {
-  page: 'overview', goal: { ...INITIAL_GOAL, ...saved.goal }, plan: saved.plan || null,
+  page: ['insight','planner','activity','goals'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'overview', goal: { ...INITIAL_GOAL, ...saved.goal }, plan: saved.plan || null,
   adjustments: { Dining: 60, Shopping: 0, Subscriptions: 0 }, protected: [],
-  selected: 'small', fineTune: false, note: '', history: [], search: '', category: 'All',
+  selected: 'small', history: [], note: '', search: '', category: 'All',
   reminders: saved.reminders ?? true, day: saved.day || 'Monday', hiddenBalance: saved.hiddenBalance || false,
 };
-let lastFocus;
-let toastTimer;
+let lastFocus, toastTimer;
+const isFlow = () => ['insight', 'planner', 'success'].includes(state.page);
+const result = () => simulate(state.goal, state.adjustments);
+const agentMark = `<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 13.5V18M10 8.5V18M15 4v14M20 9v9" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>`;
 
 function persist() {
-  try {
-    const { goal, plan, reminders, day, hiddenBalance } = state;
-    localStorage.setItem('money-moves-v1', JSON.stringify({ goal, plan, reminders, day, hiddenBalance }));
-  } catch { toast('Your browser couldn’t save this change.'); }
+  try { const { goal, plan, reminders, day, hiddenBalance } = state; localStorage.setItem('money-moves-v1', JSON.stringify({ goal, plan, reminders, day, hiddenBalance })); }
+  catch { toast('This browser couldn’t save your changes.'); }
 }
 function toast(message) {
-  $('#toast').textContent = message;
-  $('#toast').classList.add('visible');
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => $('#toast').classList.remove('visible'), 3200);
+  $('#toast').textContent=message; $('#toast').classList.add('visible');
+  clearTimeout(toastTimer); toastTimer=setTimeout(()=>$('#toast').classList.remove('visible'),3000);
 }
 function snapshot() {
-  state.history.push({ adjustments: { ...state.adjustments }, protected: [...state.protected], selected: state.selected, note: state.note });
-  if (state.history.length > 20) state.history.shift();
+  state.history.push({ adjustments:{...state.adjustments}, protected:[...state.protected], selected:state.selected, note:state.note });
+  if(state.history.length>20)state.history.shift();
 }
-function result() { return simulate(state.goal, state.adjustments); }
-function changeView(update) {
-  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  if (document.startViewTransition && !reduced) document.startViewTransition(update);
+function transition(update) {
+  if(document.startViewTransition && !matchMedia('(prefers-reduced-motion: reduce)').matches)document.startViewTransition(update);
   else update();
 }
-function renderMain(animate = false) {
-  const update = () => { $('#main').innerHTML = page(); document.title = `${state.page === 'planner' ? 'Make your next move' : 'Your overview'} · ABC Bank`; };
-  if (animate) changeView(update); else update();
-  document.querySelectorAll('[data-nav]').forEach(button => {
-    const active = button.dataset.nav === state.page;
-    button.classList.toggle('active', active);
-    if (active) button.setAttribute('aria-current', 'page'); else button.removeAttribute('aria-current');
-  });
+function navigate(page) { closeSheet();state.page=page;transition(render);window.scrollTo({top:0,behavior:'instant'}); }
+function render() {
+  history.replaceState(null,'',location.pathname + location.search + (state.page==='overview'?'':`#${state.page}`));
+  const flow=isFlow();
+  $('#app').innerHTML=`<div class="app-shell ${flow?'flow':''}">${flow?flowHeader():bankHeader()}<main id="main" class="${state.page}">${pageContent()}</main>${flow?'':bottomNavigation()}</div>`;
+  document.title=`${state.page==='planner'?'Your next move':state.page==='insight'?'Your dining insight':'ABC Bank'} · Money Moves`;
 }
-function navigate(pageName) { closeModal(); state.page = pageName; renderMain(true); window.scrollTo({ top: 0, behavior: 'instant' }); }
-const nav = [['overview','home','Overview'],['planner','spark','Money Moves'],['activity','chart','Activity'],['goals','flag','Goals']];
-function navigation(mobile = false) {
-  return nav.map(([id, glyph, label]) => `<button data-nav="${id}" class="${state.page === id ? 'active' : ''}">${icon(glyph)}<span>${label}</span>${id === 'planner' && !mobile ? '<i class="nav-dot"></i>' : ''}</button>`).join('');
+function bankHeader() {
+  return `<header class="bank-header"><a href="#" class="brand" data-action="home"><span class="bank-mark"><i></i><i></i><i></i></span>ABC Bank</a><div><button class="icon-button" data-action="notifications" aria-label="Notifications">${icon('bell')}<span class="notification-dot"></span></button><button class="avatar" data-action="account" aria-label="Alex’s account">AC</button></div></header>`;
 }
-function shell() {
-  $('#app').innerHTML = `<div class="app-shell"><aside class="sidebar"><a class="brand" href="#" data-action="home"><span class="brand-symbol"><i></i><i></i><i></i></span>ABC <span>Bank</span></a><div class="nav-caption">YOUR SPACE</div><nav aria-label="Main navigation">${navigation()}</nav><div class="sidebar-bottom"><div class="side-note">${icon('shield')}<span>A little guidance.<br>Always your decision.</span></div><button class="settings-link" data-action="settings">${icon('settings')} Preferences</button><button class="profile" data-action="account"><span class="avatar">AC</span><span>Alex Chen<small>Personal account</small></span>${icon('down')}</button></div></aside><div class="workspace"><header class="topbar"><span class="topbar-greeting">Your money, with a little perspective.</span><span class="mobile-brand">ABC Bank</span><div class="topbar-actions"><button class="mode-label" data-action="about"><i></i> Scenario mode ${icon('info')}</button><button class="icon-button" data-action="notifications" aria-label="Notifications">${icon('bell')}<i class="notification-dot"></i></button><button class="avatar" data-action="account" aria-label="View your account">AC</button></div></header><main id="main" class="main">${page()}</main></div><nav class="mobile-nav" aria-label="Mobile navigation">${navigation(true)}</nav></div>`;
+function flowHeader() {
+  return `<header class="flow-header"><button class="icon-button" data-action="${state.page==='planner'?'back-insight':'home'}" aria-label="Go back">${icon('left')}</button><span>${state.page==='success'?'Your plan':state.page==='insight'?'Spending insight':'Your next move'}</span><button class="icon-button" data-action="about" aria-label="About Money Moves">${icon('info')}</button></header>`;
 }
-function page() {
-  if (state.page === 'planner') return planner();
-  if (state.page === 'activity') return activity();
-  if (state.page === 'goals') return goals();
-  if (state.page === 'success') return success();
+function bottomNavigation() {
+  return `<nav class="bottom-nav" aria-label="Main navigation">${[['overview','home','Home'],['activity','chart','Activity'],['goals','flag','Goals'],['settings','settings','Settings']].map(([page,glyph,label])=>`<button ${page==='settings'?'data-action="settings"':`data-nav="${page}"`} class="${state.page===page?'active':''}" ${state.page===page?'aria-current="page"':''}>${icon(glyph)}<span>${label}</span></button>`).join('')}</nav>`;
+}
+function pageContent() {
+  if(state.page==='insight')return insight();
+  if(state.page==='planner')return planner();
+  if(state.page==='success')return success();
+  if(state.page==='activity')return activity();
+  if(state.page==='goals')return goals();
   return overview();
 }
-function eyebrow(text, glyph = 'spark') { return `<span class="eyebrow">${icon(glyph)} ${text}</span>`; }
-function footer() { return `<footer><span>${icon('lock')} Your money stays in your control.</span><button data-action="about">Sample account · How this works ${icon('arrow')}</button></footer>`; }
+function button(label, action, glyph='arrow', type='primary') {
+  return `<button class="button ${type}" data-action="${action}">${label}${glyph?icon(glyph):''}</button>`;
+}
+function agentLabel(label='Money Moves') { return `<span class="agent-label"><span class="agent-mark">${agentMark}</span>${label}</span>`; }
+function dock(label,action,sub='You’re in control. No money is moved.') {
+  return `<div class="flow-dock">${button(label,action)}<p>${sub}</p></div>`;
+}
 function overview() {
-  const baseline = simulate(state.goal, {});
-  return `<div class="page-title"><div><span class="date">THURSDAY, OCTOBER 22</span><h1>Good morning, Alex<span class="greeting-dot">.</span></h1></div><span class="quiet-label">A good day for a little clarity.</span></div>
-    <div class="account-strip"><button class="account-summary" data-action="account"><span class="account-icon">${icon('wallet')}</span><span>Everyday checking<strong>${state.hiddenBalance ? '••,•••.••' : '$8,452.80'}</strong></span><span class="account-number">•• 4829 ${icon('chevron')}</span></button><button class="account-summary" data-nav="goals"><span class="account-icon light">${icon('flag')}</span><span>Your getaway fund<strong>${money(state.goal.saved)} <small>/ ${money(state.goal.target)}</small></strong></span><span class="mini-progress" style="--progress:${state.goal.saved / state.goal.target * 100}%"></span></button></div>
-    <section class="discovery"><div class="discovery-copy">${eyebrow('ONE THING WORTH A LOOK')}<h2>Your getaway.<br>Still <em>on the cards.</em></h2><p>Dining’s up $120 this month.<br>A small move could keep your goal on track.</p><button class="button primary" data-action="begin">Find my next move ${icon('arrow')}</button><button class="evidence-link" data-action="evidence">Why this came up ${icon('info')}</button></div><div class="destination"><div class="destination-art">${landscape()}<span class="destination-tag">${icon('plane')} ${escape(state.goal.name)}</span></div><div class="destination-bottom"><div><span>YOUR NEXT CHAPTER</span><strong>${money(state.goal.target)}<small>in ${state.goal.months} months</small></strong></div><div class="destination-stamp">a little<br><em>escape</em><span>✳</span></div></div><div class="destination-progress"><i style="width:${Math.min(100, state.goal.saved/state.goal.target*100)}%"></i></div></div></section>
-    <div class="overview-bottom"><section class="spending-summary"><div class="section-head"><h3>This month, at a glance</h3><button class="text-button" data-nav="activity">All activity ${icon('arrow')}</button></div><div class="spend-total">$1,280 <span>spent in October</span></div><div class="spend-bar" role="img" aria-label="Dining 420 dollars, groceries 360 dollars, shopping 280 dollars, transport 140 dollars, subscriptions 80 dollars">${spending.map(c=>`<i style="flex:${c.total};background:${c.color}"></i>`).join('')}</div><div class="spend-legend">${spending.slice(0,3).map(c=>`<span><i style="background:${c.color}"></i>${c.name}<b>${money(c.total)}</b></span>`).join('')}</div></section><section class="next-move-note">${eyebrow(state.plan ? 'YOUR PLAN IS IN PLACE' : 'THE OPPORTUNITY', 'flag')}<h3>${state.plan ? `${money(state.plan.monthlyExtra)} more for your future.` : `${money(baseline.needed)} a month. That’s the gap.`}</h3><p>${state.plan ? 'Your targets are saved. Keep them flexible.' : 'You’re closer than it might feel.'}</p><button class="text-button" data-action="${state.plan ? 'edit-plan' : 'begin'}">${state.plan ? 'Revisit my plan' : 'Show me how'} ${icon('arrow')}</button></section></div>${footer()}`;
+  const baseline=simulate(state.goal,{});
+  return `<section class="balance-section"><div class="greeting">Good morning, Alex</div><div class="balance-caption">Available balance <button class="inline-icon" data-action="privacy" aria-label="${state.hiddenBalance?'Show':'Hide'} balance">${icon('eye')}</button></div><h1 class="balance">${state.hiddenBalance?'••,•••.••':'$8,452<span>.80</span>'}</h1><button class="account-caption" data-action="account">Everyday checking <span>•• 4829</span>${icon('chevron')}</button></section>
+    <section class="home-insight">${agentLabel()}<span class="insight-fresh">New insight</span><h2>Dining’s up.<br>Your getaway can<br>stay on track.</h2><p>A small change could keep you on track.</p><div class="insight-comparison"><div><span>This month</span><strong>$420</strong></div><div class="comparison-spark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div><span class="change-badge">+$120</span></div>${button('See my next move','insight')}</section>
+    <section class="home-goal"><div class="section-title"><h2>Your goal</h2><button class="text-button" data-nav="goals">View goal ${icon('chevron')}</button></div><button class="goal-row" data-nav="goals"><span class="goal-glyph">${icon('plane')}</span><span><strong>${esc(state.goal.name)}</strong><small>${state.goal.months} months to go</small></span><span class="goal-value">${money(state.goal.saved)}<small>of ${money(state.goal.target)}</small></span></button><div class="progress-track" role="progressbar" aria-label="Goal savings" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(state.goal.saved/state.goal.target*100)}"><i style="width:${Math.min(100,state.goal.saved/state.goal.target*100)}%"></i></div><div class="goal-foot"><span>${Math.round(state.goal.saved/state.goal.target*100)}% saved</span><span>${state.plan?'Plan saved':`${money(baseline.needed)} / mo to close the gap`}</span></div></section>
+    <section class="home-activity"><div class="section-title"><h2>Recent activity</h2><button class="text-button" data-nav="activity">See all ${icon('chevron')}</button></div>${transactions.slice(0,2).map(transaction).join('')}</section><p class="sample-note">Sample account · Interactive prototype</p>`;
 }
-function selectScenario(choice, record = true) {
-  if (record) snapshot();
-  const needed = simulate(state.goal, {}).needed;
-  const request = choice === 'dinners' ? 'Keep my Friday dinners' : choice === 'cushion' ? `Save $${needed + 30} extra` : 'Find the smallest change';
-  const suggested = suggestPlan(state.goal, [], request);
-  state.adjustments = suggested.adjustments;
-  state.protected = suggested.protectedCategories;
-  state.selected = choice;
-  state.note = '';
+function insight() {
+  const baseline=simulate(state.goal,{});
+  return `<div class="flow-intro">${agentLabel('Money Moves · Insight')}<h1>A closer look<br>at your dining.</h1><p>A few more meals out this month.</p></div><section class="dining-figure"><div><span>October spending</span><strong>$420</strong></div><span class="delta">↑ $120 <small>vs. usual</small></span></section><section class="dining-chart" aria-label="Dining spending June through October"><div class="usual-line"><span>Usual $300</span></div>${monthlyDining.map((m,i)=>`<div class="chart-column"><span class="bar-value">${i===4?'$420':''}</span><i style="height:${m.value/450*113}px" class="${i===4?'current':''}"></i><span>${m.month}</span></div>`).join('')}</section><button class="evidence-button" data-action="evidence">See the purchases ${icon('chevron')}</button><section class="goal-impact"><span class="goal-glyph">${icon('plane')}</span><div><h2>Your goal is still within reach.</h2><p>${baseline.gap?`${money(baseline.needed)} more a month could close your ${money(baseline.gap)} savings gap.`:'Your current savings already cover your goal.'}</p></div></section><div class="insight-context"><h2>What changed?</h2><div class="spending-breakdown">${[['Restaurants',230],['Cafés',90],['Delivery',70],['Other',30]].map(([label,value])=>`<span>${label}<b>${money(value)}</b></span>`).join('')}</div></div>${dock('Find a way forward','begin')}`;
 }
-function scenarioCards() {
-  const need = simulate(state.goal, {}).needed;
-  const smallExtra = simulate(state.goal, suggestPlan(state.goal).adjustments).monthlyExtra;
-  const dinnerExtra = simulate(state.goal, suggestPlan(state.goal, [], 'Keep my Friday dinners').adjustments).monthlyExtra;
-  const cushionExtra = simulate(state.goal, suggestPlan(state.goal, [], `Save $${need + 30} extra`).adjustments).monthlyExtra;
-  return `<div class="scenario-choices" role="group" aria-label="Choose a starting point">${[
-    ['small','flag','The smallest change','One small adjustment.',smallExtra],
-    ['dinners','utensils','Keep the dinners','Make room somewhere else.',dinnerExtra],
-    ['cushion','sun','A little breathing room','A cushion for the unexpected.',cushionExtra],
-  ].map(([id,glyph,title,sub,amount])=>`<button class="scenario ${state.selected === id ? 'selected' : ''}" data-scenario="${id}" aria-pressed="${state.selected === id}"><span class="scenario-icon">${icon(glyph)}</span><span class="selection-mark">${icon('check')}</span><strong>${title}</strong><small>${sub}</small><span class="scenario-amount">+${money(amount)}<small> / month</small></span></button>`).join('')}</div>`;
+function chooseScenario(choice,record=true) {
+  if(record)snapshot();
+  const needed=simulate(state.goal,{}).needed;
+  const request=choice==='dinners'?'Keep my Friday dinners':choice==='cushion'?`Save $${needed+30} extra`:choice==='lighter'?'Save $30 extra':'Find the smallest change';
+  const plan=suggestPlan(state.goal,[],request);
+  state.adjustments=plan.adjustments;state.protected=plan.protectedCategories;state.selected=choice;state.note='';
 }
-function forecastChart() {
-  const base = simulate(state.goal, {}), projected = result();
-  const max = Math.max(state.goal.target * 1.15, projected.projected * 1.05, state.goal.saved * 1.1);
-  const y = value => 155 - value/max*125;
-  const points = amount => Array.from({length:state.goal.months+1},(_,i)=>`${30+i/state.goal.months*440},${y(state.goal.saved+amount*i)}`).join(' ');
-  const targetY = y(state.goal.target);
-  return `<svg viewBox="0 0 520 190" class="forecast-svg" role="img" aria-label="Savings projection: ${money(projected.projected)} with your plan, compared with ${money(base.projected)} on your current path"><defs><linearGradient id="area" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#d2e5c1" stop-opacity=".65"/><stop offset="1" stop-color="#edf4e4" stop-opacity=".05"/></linearGradient></defs><line x1="30" y1="${targetY}" x2="478" y2="${targetY}" stroke="#cbd6be" stroke-dasharray="4 5"/><text x="478" y="${targetY-9}" text-anchor="end">${money(state.goal.target)} goal</text><polygon points="30,164 ${points(state.goal.base+projected.monthlyExtra)} 470,164" fill="url(#area)"/><polyline points="${points(state.goal.base)}" stroke="#c6cbbf" stroke-width="2" stroke-dasharray="5 6" fill="none"/><polyline class="forecast-line" points="${points(state.goal.base+projected.monthlyExtra)}" stroke="#3e674c" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/><circle cx="470" cy="${y(projected.projected)}" r="5" fill="#3e674c" stroke="#fff" stroke-width="3"/><circle cx="30" cy="${y(state.goal.saved)}" r="4" fill="#92ad7a"/><text x="30" y="184">Today</text><text x="470" y="184" text-anchor="end">In ${state.goal.months} months</text></svg>`;
+function shortExplanation() {
+  if(result().monthlyExtra===0)return 'Your spending stays as it is. You can adjust this anytime.';
+  if(state.protected.includes('Dining')){
+    const categories=Object.entries(state.adjustments).filter(([,value])=>value>0).map(([category])=>category.toLowerCase()).join(' and ');
+    return `Keep the dinners. Make a little room in ${categories} instead.`;
+  }
+  if(state.selected==='cushion')return 'A slightly bigger move gives your goal a little breathing room.';
+  return 'One small adjustment, with your everyday essentials protected.';
 }
-function explanation() {
-  const reductions = Object.entries(state.adjustments).filter(([,v])=>v>0);
-  if (!reductions.length) return 'No spending changes. Your scheduled savings continue as they are.';
-  if (state.protected.includes('Dining')) return 'Dinners stay. A little less shopping makes room for your getaway.';
-  if (state.selected === 'cushion') return 'A slightly bigger adjustment adds a little breathing room.';
-  return reductions.length === 1 ? `Just ${money(reductions[0][1])} less in ${reductions[0][0].toLowerCase()}. Everything else stays as it is.` : 'A little room across a few categories, with essentials protected.';
-}
-function adjustmentRows() {
-  return Object.keys(limits).map(category => {
-    const current = spending.find(c=>c.name===category), value=state.adjustments[category], locked=state.protected.includes(category);
-    return `<div class="budget-row"><span class="budget-icon">${icon(current.icon)}</span><div class="budget-name"><strong>${category}</strong><span>${locked ? 'Stays just as it is' : `${money(current.total)} → ${money(current.total-value)} / month`}</span></div><span class="budget-change ${!value?'unchanged':''}">${value ? `−${money(value)}` : 'No change'}</span><button class="icon-button protect ${locked?'protected':''}" data-protect="${category}" aria-label="${locked?'Unprotect':'Protect'} ${category}" aria-pressed="${locked}">${icon(locked?'lock':'unlock')}</button></div>${state.fineTune?`<div class="slider-row"><input aria-label="${category} monthly reduction" type="range" min="0" max="${limits[category]}" step="5" value="${value}" data-slider="${category}" ${locked?'disabled':''} style="--fill:${value/limits[category]*100}%"><span>${money(value)} less</span></div>`:''}`;
+function planChanges(editable=false) {
+  const active=Object.entries(state.adjustments).filter(([,value])=>value>0);
+  if(!active.length)return '<div class="unchanged-plan">No new spending targets.</div>';
+  return active.map(([category,value])=>{
+    const c=spending.find(c=>c.name===category);
+    return `<div class="plan-change"><span class="merchant-icon">${icon(c.icon)}</span><div><strong>${category}</strong><small>${money(c.total)} → <b>${money(c.total-value)}</b> / month</small></div><span class="reduction">−${money(value)}${editable?'<small>per month</small>':''}</span></div>`;
   }).join('');
 }
-function planContent() {
+function forecastChart() {
   const r=result();
-  return `<section class="planning-stage"><div class="section-head"><span class="section-label">01 &nbsp; CHOOSE YOUR APPROACH</span><button class="text-button undo" data-action="undo" ${state.history.length?'':'disabled'}>${icon('left')} Undo</button></div>${scenarioCards()}<div class="plan-body"><section class="plan-suggestion"><div class="suggestion-caption"><span class="assistant-symbol">${icon('spark')}</span><span>Here’s a way forward.</span></div><h2>${explanation()}</h2><div class="budget-list">${adjustmentRows()}</div><div class="budget-bottom"><span>${icon('shield')} Essentials stay protected</span><button class="text-button" data-action="fine-tune">${icon('settings')} ${state.fineTune?'Done adjusting':'Fine-tune'}</button></div><details class="reasoning"><summary>What went into this? ${icon('down')}</summary><ol><li>Compared $420 in dining with your usual $300.</li><li>Calculated a ${money(simulate(state.goal,{}).needed)} monthly gap from your goal and scheduled savings.</li><li>Respected your protected categories and capped reductions.</li></ol><button class="text-button" data-action="evidence">View the spending evidence ${icon('arrow')}</button></details></section><aside class="forecast"><span class="section-label">02 &nbsp; SEE THE DIFFERENCE</span><div class="forecast-number" aria-live="polite">${money(r.projected)}<span>projected savings</span></div><span class="forecast-status ${r.gap?'behind':''}">${icon(r.gap?'flag':'check')}${r.gap?`${money(r.gap)} left to close`:r.surplus?`${money(r.surplus)} of breathing room`:'Your goal, within reach'}</span>${forecastChart()}<div class="forecast-key"><span><i></i> With this plan</span><span><i></i> Current path</span></div><div class="contribution"><span>Your monthly savings<strong>${money(state.goal.base+r.monthlyExtra)}</strong></span><span>${money(state.goal.base)} scheduled<small>+ ${money(r.monthlyExtra)} from your adjustments</small></span></div><button class="button primary full" data-action="review">This feels right ${icon('arrow')}</button><p class="forecast-disclaimer">Nothing moves until you decide. <button data-action="calculation">View assumptions</button></p></aside></div></section>`;
+  const top=Math.max(state.goal.target*1.13,r.projected*1.08,state.goal.saved*1.1);
+  const y=value=>128-value/top*100;
+  const points=monthly=>Array.from({length:state.goal.months+1},(_,i)=>`${10+i/state.goal.months*314},${y(state.goal.saved+monthly*i)}`).join(' ');
+  return `<svg viewBox="0 0 344 153" role="img" aria-label="${money(r.projected)} projected savings, versus ${money(simulate(state.goal,{}).projected)} without adjustments"><defs><linearGradient id="forecast-fill" x2="0" y2="1"><stop stop-color="#dce5ff"/><stop offset="1" stop-color="#f5f7ff" stop-opacity="0"/></linearGradient></defs><line x1="10" y1="${y(state.goal.target)}" x2="324" y2="${y(state.goal.target)}" stroke="#ced5e5" stroke-dasharray="3 4"/><text x="324" y="${y(state.goal.target)-8}" text-anchor="end">${money(state.goal.target)} goal</text><polygon points="10,130 ${points(state.goal.base+r.monthlyExtra)} 324,130" fill="url(#forecast-fill)"/><polyline points="${points(state.goal.base)}" fill="none" stroke="#bcc4d4" stroke-width="2" stroke-dasharray="4 5"/><polyline class="forecast-line" points="${points(state.goal.base+r.monthlyExtra)}" fill="none" stroke="#425fe1" stroke-width="2.5" stroke-linecap="round"/><circle cx="324" cy="${y(r.projected)}" r="4" fill="#425fe1" stroke="#fff" stroke-width="2"/><text x="10" y="151">Today</text><text x="324" y="151" text-anchor="end">In ${state.goal.months} months</text></svg>`;
 }
-function planner() {
-  return `<button class="back-button" data-nav="overview">${icon('left')} Overview</button><div class="planner-heading">${eyebrow('MONEY MOVES')}<div><h1>A plan for your life.<br><em>Not the other way around.</em></h1><button class="goal-context" data-action="edit-goal">${icon('plane')} ${escape(state.goal.name)} <b>${money(state.goal.target)}</b> ${icon('edit')}</button></div><p>Try a direction. See what changes. Keep what matters.</p></div><div id="planning-stage">${planContent()}</div><section class="composer-card"><div class="composer-label"><span class="assistant-symbol">${icon('spark')}</span><span>Or, tell us what matters to you.</span></div><form id="request-form"><input name="request" id="request" aria-label="Change your plan" placeholder="Keep dining. Could I save $50 a month?" maxlength="200" autocomplete="off"><button type="submit" class="composer-send" aria-label="Update my plan">${icon('arrow')}</button></form><div class="composer-bottom"><span>Scenario planner · sample data</span><button data-action="about">About this demo ${icon('info')}</button></div><div id="reply" aria-live="polite">${state.note?`<p class="planner-note">${escape(state.note)}</p>`:''}</div></section>${footer()}`;
+function planBody() {
+  const r=result();
+  return `<section class="agent-recommendation">${agentLabel()}<h1>Save <span>${money(r.monthlyExtra)} more</span><br>each month.</h1><p>${shortExplanation()}</p></section><div class="plan-options" role="group" aria-label="Try another approach"><button data-scenario="small" class="${state.selected==='small'?'selected':''}" aria-pressed="${state.selected==='small'}">${icon('flag')} Suggested</button><button data-scenario="dinners" class="${state.selected==='dinners'?'selected':''}" aria-pressed="${state.selected==='dinners'}">${icon('utensils')} Keep dining</button><button data-action="options" aria-label="More ways to adjust this plan">${icon('settings')}</button></div><section class="change-section"><div class="section-title"><h2>${Object.values(state.adjustments).filter(Boolean).length>1?'Your monthly moves':'Your small move'}</h2><button class="text-button" data-action="adjust">Edit</button></div>${planChanges(true)}<div class="protected-note">${icon('shield')} ${state.protected.includes('Dining')?'Dining, groceries & essentials protected':'Groceries & essentials protected'}</div></section><section class="forecast-section"><div class="forecast-heading"><div><span>You could reach</span><strong>${money(r.projected)}</strong></div><span class="forecast-status ${r.gap?'gap':''}">${icon(r.gap?'flag':'check')}${r.gap?`${money(r.gap)} short`:'On track'}</span></div>${forecastChart()}<div class="forecast-key"><span><i></i>With your plan</span><span><i></i>Current path</span></div><button class="calculation-link" data-action="calculation">How we worked this out ${icon('info')}</button></section><div class="planner-tools"><button data-action="ask">${icon('chat')}<span>What would make this work for you?</span>${icon('chevron')}</button><button class="undo" data-action="undo" ${state.history.length?'':'disabled'}>${icon('left')} Undo</button></div>${state.note?`<p class="planner-note" role="status">${esc(state.note)}</p>`:''}`;
 }
-function updateStage(animate = true) {
-  const active = document.activeElement;
-  const focusKey = ['scenario', 'protect', 'action'].find(key => active?.dataset?.[key]);
-  const focusValue = focusKey ? active.dataset[focusKey] : null;
-  const update=()=>{
-    $('#planning-stage').innerHTML=planContent();
-    $('#reply').innerHTML=state.note?`<p class="planner-note">${escape(state.note)}</p>`:'';
-    if (focusKey) document.querySelector(`[data-${focusKey}="${focusValue}"]`)?.focus({preventScroll:true});
-  };
-  if(animate) changeView(update); else update();
+function planner() {return `<div class="flow-progress"><span>Your plan</span><span>1 of 2</span></div><div id="plan-body">${planBody()}</div>${dock('Review my plan','review','A projection, not a guarantee. You decide what happens.')}`;}
+function updatePlan() {
+  const current=document.activeElement;
+  const data=current?.dataset?.scenario;
+  transition(()=>{
+    $('#plan-body').innerHTML=planBody();
+    if(data)document.querySelector(`[data-scenario="${data}"]`)?.focus({preventScroll:true});
+  });
 }
 function transaction(t) {
-  return `<div class="transaction"><span class="budget-icon">${icon(t.icon)}</span><span><strong>${escape(t.merchant)}</strong><small>${t.category} · Oct ${Number(t.date.slice(-2))}${t.grouped?' · Grouped purchases':''}</small></span><b>−${money(t.amount,true)}</b></div>`;
+  return `<div class="transaction"><span class="merchant-icon">${icon(t.icon)}</span><div><strong>${esc(t.merchant)}</strong><small>${t.category} · Oct ${Number(t.date.slice(-2))}${t.grouped?' · Grouped':''}</small></div><b>−${money(t.amount,true)}</b></div>`;
 }
-function activityList() {
-  const rows=transactions.filter(t=>(state.category==='All'||state.category===t.category)&&t.merchant.toLowerCase().includes(state.search.toLowerCase()));
-  return `<div class="activity-caption">${rows.length} entries · ${money(rows.reduce((sum,t)=>sum+t.amount,0),true)} total</div>${rows.length?rows.map(transaction).join(''):'<p class="empty-state">Nothing here yet. Try another search.</p>'}`;
+function activityResults() {
+  const rows=transactions.filter(t=>(state.category==='All'||t.category===state.category)&&t.merchant.toLowerCase().includes(state.search.toLowerCase()));
+  return `<div class="activity-caption">October 2026 · ${money(rows.reduce((sum,t)=>sum+t.amount,0),true)} spent</div>${rows.length?rows.map(transaction).join(''):'<p class="empty-state">No purchases found.</p>'}`;
 }
 function activity() {
-  return `<div class="page-title"><div><span class="date">OCTOBER 2026</span><h1>The everyday, made clear.</h1></div></div><div class="activity-controls"><label>${icon('search')}<input id="search" type="search" aria-label="Search transactions" placeholder="Find a purchase" value="${escape(state.search)}"></label><select id="category" aria-label="Filter category">${['All',...spending.map(c=>c.name)].map(c=>`<option ${state.category===c?'selected':''}>${c}</option>`).join('')}</select></div><section class="activity-list" id="activity-list">${activityList()}</section>${footer()}`;
+  return `<div class="page-heading"><h1>Activity</h1><p>The everyday, made clear.</p></div><label class="search-field">${icon('search')}<input id="search" type="search" placeholder="Find a purchase" aria-label="Search transactions" value="${esc(state.search)}"></label><select class="category-select" id="category" aria-label="Filter category">${['All',...spending.map(c=>c.name)].map(c=>`<option ${state.category===c?'selected':''}>${c}</option>`).join('')}</select><section id="activity-results">${activityResults()}</section>`;
 }
 function goals() {
-  return `<div class="page-title"><div><span class="date">SOMETHING TO LOOK FORWARD TO</span><h1>A little closer to <em>what’s next.</em></h1></div></div><section class="goal-detail"><div class="goal-art">${landscape()}</div><div class="goal-detail-copy">${eyebrow('YOUR GETAWAY', 'plane')}<h2>${escape(state.goal.name)}</h2><p class="goal-funding">${money(state.goal.saved)} <span>/ ${money(state.goal.target)}</span></p><div class="goal-track"><i style="width:${Math.min(100,state.goal.saved/state.goal.target*100)}%"></i></div><p>${Math.round(state.goal.saved/state.goal.target*100)}% saved · ${state.goal.months} months to go</p><div class="goal-buttons"><button class="button primary" data-action="${state.plan?'edit-plan':'begin'}">${state.plan?'Revisit my plan':'Make a plan'} ${icon('arrow')}</button><button class="button secondary" data-action="edit-goal">Edit goal</button></div>${state.plan?'<button class="text-button pause-link" data-action="pause">Pause this plan</button>':''}</div></section>${footer()}`;
+  const g=state.goal;
+  return `<div class="page-heading"><h1>Your goals</h1><p>Make room for what matters.</p></div><section class="goal-detail"><span class="large-goal-glyph">${icon('plane')}</span><h2>${esc(g.name)}</h2><p>${g.months} months to go</p><div class="goal-funded">${money(g.saved)}<span>of ${money(g.target)}</span></div><div class="progress-track"><i style="width:${Math.min(100,g.saved/g.target*100)}%"></i></div><div class="goal-foot"><span>${Math.round(g.saved/g.target*100)}% saved</span><button class="text-button" data-action="edit-goal">Edit goal</button></div></section><section class="goal-plan"><div class="section-title"><h2>${state.plan?'Your active plan':'Your next move'}</h2>${state.plan?'<span class="saved-badge">Saved</span>':''}</div><p>${state.plan?`${money(state.plan.monthlyExtra)} extra for your goal each month.`:'A small adjustment could keep you on track.'}</p>${button(state.plan?'View my plan':'Make a plan',state.plan?'edit-plan':'begin')}${state.plan?'<button class="pause-button" data-action="pause">Pause plan</button>':''}</section>`;
 }
 function success() {
   const r=simulate(state.goal,state.plan?.adjustments||{});
-  return `<section class="success"><div class="success-check">${icon('check')}</div>${eyebrow('PLAN SAVED')}<h1>That’s a <em>good move.</em></h1><p>A little more room for what you’re looking forward to.</p><div class="success-ticket"><div class="ticket-art">${landscape()}</div><div class="ticket-content"><span>${escape(state.goal.name)}</span><strong>${money(r.projected)}<small>projected in ${state.goal.months} months</small></strong><div><span>Extra each month</span><b>${money(r.monthlyExtra)}</b></div><div><span>Check-in preference</span><b>${state.reminders?state.day:'Off'}</b></div><p>${r.gap?`${money(r.gap)} still to go. You can adjust your plan anytime.`:'Your goal has a plan. Keep it flexible.'}</p></div></div><div class="success-buttons"><button class="button primary" data-nav="overview">Back to my overview ${icon('arrow')}</button><button class="button secondary" data-action="edit-plan">Edit plan</button><button class="icon-button" data-action="download" aria-label="Download plan">${icon('download')}</button></div><small>No money transferred. No actual reminder scheduled.</small></section>${footer()}`;
+  return `<section class="success-content"><div class="success-symbol">${icon('check')}</div><span class="overline">PLAN SAVED</span><h1>A good move,<br>Alex.</h1><p>Your getaway has a plan.<br>And you can change it anytime.</p><div class="saved-plan-summary"><span class="goal-glyph">${icon('plane')}</span><div><strong>${esc(state.goal.name)}</strong><small>${money(r.projected)} projected in ${state.goal.months} months</small></div></div><div class="saved-plan-lines"><div><span>Extra each month</span><b>${money(r.monthlyExtra)}</b></div><div><span>Weekly check-in</span><b>${state.reminders?state.day:'Off'}</b></div></div>${r.gap?`<p class="gap-note">${money(r.gap)} still to save. Revisit your plan anytime.</p>`:''}<div class="success-info">${icon('shield')}<span>No money has moved.<br>These are targets for you to track.</span></div><button class="text-button" data-action="edit-plan">Make a change ${icon('arrow')}</button></section>${dock('Back to home','home','Check-in preferences are saved. No real reminder is scheduled.')}`;
 }
-function modal(html, wide = false) {
+function sheet(html,options={}) {
   lastFocus=document.activeElement;
-  $('#overlay-root').innerHTML=`<div class="overlay"><section role="dialog" aria-modal="true" aria-labelledby="modal-title" class="modal ${wide?'wide':''}"><button class="icon-button close-modal" data-action="close" aria-label="Close">${icon('close')}</button>${html}</section></div>`;
-  document.body.style.overflow='hidden';
-  queueMicrotask(()=>$('.close-modal')?.focus());
+  $('#overlay-root').innerHTML=`<div class="overlay"><section class="sheet ${options.large?'large':''}" role="dialog" aria-modal="true" aria-labelledby="sheet-title"><div class="sheet-handle"></div><button class="icon-button close-sheet" data-action="close" aria-label="Close">${icon('close')}</button>${html}</section></div>`;
+  document.body.style.overflow='hidden';queueMicrotask(()=>$('.close-sheet')?.focus());
 }
-function closeModal() { $('#overlay-root').innerHTML=''; document.body.style.overflow=''; lastFocus?.focus?.(); }
-function evidence() {
-  modal(`${eyebrow('THE CONTEXT')}<h2 id="modal-title">A few more meals out.</h2><p>Your October dining is $120 above usual.</p><div class="comparison"><div><small>Usual</small><strong>$300</strong><i style="--width:71%"></i></div><div><small>October</small><strong>$420</strong><i style="--width:100%"></i></div></div><details class="purchase-details"><summary>See the purchases ${icon('down')}</summary>${transactions.filter(t=>t.category==='Dining').map(transaction).join('')}</details><p class="modal-note">“Usual” is rounded from your June–September average. All purchases are synthetic sample data.</p><button class="button primary full" data-action="begin">Find a way forward ${icon('arrow')}</button>`);
+function closeSheet(){
+  if(!$('.overlay'))return;
+  if($('#adjust-total') && state.page==='planner' && $('#plan-body'))$('#plan-body').innerHTML=planBody();
+  $('#overlay-root').innerHTML='';document.body.style.overflow='';
+  if(lastFocus?.isConnected)lastFocus.focus();
+  else if(state.page==='planner')document.querySelector('[data-action="adjust"]')?.focus({preventScroll:true});
 }
-function review() {
-  const r=result();
-  modal(`${eyebrow('ONE LAST LOOK', 'shield')}<h2 id="modal-title">Your plan.<br><em>Your say.</em></h2><div class="review-stat"><strong>+${money(r.monthlyExtra)}</strong><span>toward your getaway each month</span></div><div class="review-changes">${Object.entries(state.adjustments).filter(([,v])=>v).map(([category,value])=>`<div><span>${category}</span><b>${money(spending.find(c=>c.name===category).total-value)} / month</b></div>`).join('')||'<p>No new spending targets.</p>'}</div><label class="check-label"><input id="reminders" type="checkbox" ${state.reminders?'checked':''}><span>A gentle weekly check-in<small>Preference only in this prototype</small></span></label><div class="reminder-day"><label for="day">My day</label><select id="day" ${state.reminders?'':'disabled'}>${['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'].map(day=>`<option ${state.day===day?'selected':''}>${day}</option>`).join('')}</select></div>${r.gap?`<p class="gap-note">This plan leaves ${money(r.gap)} still to save.</p>`:''}<button class="button primary full" data-action="save">Save this plan ${icon('check')}</button><p class="modal-note">You’re saving spending targets. No transfers or bank changes.</p>`);
+function evidence(){sheet(`<span class="overline">OCTOBER DINING</span><h2 id="sheet-title">Behind the $420.</h2><p>Sample purchases behind this insight.</p><div class="evidence-transactions">${transactions.filter(t=>t.category==='Dining').map(transaction).join('')}</div><p class="sheet-note">Grouped rows include the remaining purchases. Your usual $300 is rounded from the June–September average.</p>`,{large:true});}
+function options(){sheet(`<span class="overline">MAKE IT WORK FOR YOU</span><h2 id="sheet-title">There’s more than one way.</h2><div class="option-list">${[
+  ['small','flag','The smallest change','Just enough to close the gap.'],
+  ['dinners','utensils','Keep dining unchanged','Find room somewhere else.'],
+  ['cushion','sun','Add a little breathing room','Save an extra $30 beyond the gap.'],
+  ['lighter','wallet','Start with $30 a month','Take a smaller first step.'],
+].map(([value,glyph,title,sub])=>`<button data-sheet-scenario="${value}"><span class="option-icon">${icon(glyph)}</span><span><strong>${title}</strong><small>${sub}</small></span>${icon('chevron')}</button>`).join('')}</div><button class="text-button" data-action="adjust">Set my own amounts ${icon('arrow')}</button>`);}
+function adjust(){sheet(`<span class="overline">YOUR MONTHLY TARGETS</span><h2 id="sheet-title">A little more your way.</h2><p>Adjust an amount. Protect what matters.</p><div class="adjustments">${Object.keys(limits).map(category=>{
+  const c=spending.find(c=>c.name===category),value=state.adjustments[category],locked=state.protected.includes(category);
+  return `<div class="adjustment"><div class="adjustment-title"><span>${category}<small>Currently ${money(c.total)} / month</small></span><button class="protect-button ${locked?'locked':''}" data-protect="${category}" aria-pressed="${locked}" aria-label="${locked?'Unprotect':'Protect'} ${category}">${icon(locked?'lock':'unlock')} ${locked?'Protected':'Protect'}</button></div><div class="adjustment-value"><strong data-amount="${category}">${money(value)}</strong><span>less / month</span></div><input type="range" min="0" max="${limits[category]}" step="5" value="${value}" data-slider="${category}" aria-label="${category} monthly reduction" aria-valuetext="${money(value)} less per month" ${locked?'disabled':''} style="--fill:${value/limits[category]*100}%"></div>`;
+}).join('')}</div><div class="adjust-total"><span>Projected savings</span><strong id="adjust-total">${money(result().projected)}</strong></div>${button('Done','finish-adjust','check')}`,{large:true});}
+function ask(){sheet(`<span class="overline">YOUR PRIORITIES</span><h2 id="sheet-title">What would make this work?</h2><p>Tell Money Moves what you want to keep.</p><form id="request-form"><label class="request-field"><textarea name="request" id="request" placeholder="Keep dining. Could I save $50 a month?" aria-label="Your planning preference" maxlength="200" required></textarea></label><div class="prompt-examples"><button type="button" data-example="Keep my Friday dinners">Keep my dinners</button><button type="button" data-example="Save $30 a month">Start with $30</button></div><button class="button primary" type="submit">Update my plan ${icon('arrow')}</button></form><p class="sheet-note">Demo scenario planner. Understands dining preferences and monthly savings amounts; no live AI model.</p>`);}
+function review(){const r=result();sheet(`<span class="overline">2 OF 2 · REVIEW</span><h2 id="sheet-title">Your next move.<br>Your final say.</h2><div class="review-amount">+${money(r.monthlyExtra)}<span>toward your goal each month</span></div><div class="review-changes">${planChanges()}</div><label class="reminder-toggle"><span><strong>A gentle weekly check-in</strong><small>Preference only in this demo</small></span><input id="reminders" type="checkbox" role="switch" ${state.reminders?'checked':''}></label><div class="reminder-day"><label for="day">Check-in day</label><select id="day" ${state.reminders?'':'disabled'}>${['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'].map(d=>`<option ${state.day===d?'selected':''}>${d}</option>`).join('')}</select></div>${r.gap?`<p class="gap-note">This plan leaves ${money(r.gap)} still to save.</p>`:''}${button('Save my plan','save','check')}<p class="sheet-note centered">No transfers. No account changes.<br>You’re saving spending targets.</p>`);}
+function editGoal(){sheet(`<span class="overline">YOUR NEXT CHAPTER</span><h2 id="sheet-title">Make it yours.</h2><form id="goal-form"><label class="field-label" for="name">Goal name</label><input class="field" id="name" name="name" value="${esc(state.goal.name)}" maxlength="40" required><div class="field-grid"><div><label class="field-label" for="target">Amount ($)</label><input class="field" id="target" name="target" type="number" min="${state.goal.saved+1}" max="100000" value="${state.goal.target}" required></div><div><label class="field-label" for="months">Months to go</label><input class="field" id="months" name="months" type="number" min="1" max="60" step="1" value="${state.goal.months}" required></div></div><p class="sheet-note">${money(state.goal.saved)} saved · ${money(state.goal.base)} scheduled each month.</p><button class="button primary" type="submit">Update goal ${icon('check')}</button></form>`);}
+function settings(){sheet(`<span class="overline">PREFERENCES</span><h2 id="sheet-title">Bank on your terms.</h2><label class="reminder-toggle"><span><strong>Hide my balance</strong><small>A little privacy when you need it</small></span><input type="checkbox" role="switch" id="privacy" ${state.hiddenBalance?'checked':''}></label><label class="reminder-toggle"><span><strong>Weekly check-ins</strong><small>Saved preference; no real notifications</small></span><input type="checkbox" role="switch" id="settings-reminders" ${state.reminders?'checked':''}></label>${button('All set','close','check')}<button class="text-button about-link" data-action="about">About this prototype ${icon('info')}</button>`);}
+function requestPlan(request){
+  if(!request.trim())return;
+  if(!/(?:dining|dinners|restaurants|save|extra|smallest|protect)/i.test(request)){toast('Try “Keep dining” or “Save $50 a month”.');return;}
+  snapshot();const p=suggestPlan(state.goal,state.protected,request);
+  state.adjustments=validateAdjustments(p.adjustments,p.protectedCategories);state.protected=p.protectedCategories;state.selected='custom';
+  state.note=result().gap?`${money(result().gap)} still to save. Try a longer timeline or another adjustment.`:'';
+  closeSheet();updatePlan();
 }
-function editGoal() {
-  modal(`${eyebrow('YOUR NEXT CHAPTER','plane')}<h2 id="modal-title">Make it <em>yours.</em></h2><form id="goal-form"><label class="field-label" for="name">Goal name</label><input class="field" id="name" name="name" maxlength="40" value="${escape(state.goal.name)}" required><div class="field-grid"><div><label class="field-label" for="target">Goal amount ($)</label><input class="field" id="target" name="target" type="number" min="${state.goal.saved+1}" max="100000" value="${state.goal.target}" required></div><div><label class="field-label" for="months">Months to go</label><input class="field" id="months" name="months" type="number" min="1" max="60" step="1" value="${state.goal.months}" required></div></div><p class="modal-note">${money(state.goal.saved)} saved · ${money(state.goal.base)} scheduled monthly</p><button class="button primary full" type="submit">Update goal ${icon('check')}</button></form>`);
-}
-function about() {
-  modal(`${eyebrow('SCENARIO MODE')}<h2 id="modal-title">Explore with confidence.</h2><p>This is an interactive prototype with sample transactions. The scenario planner uses deterministic rules, not a live AI model.</p><p>Choose an approach, protect a category, or ask for a monthly savings amount. You’ll see the forecast change immediately.</p><div class="modal-callout">Plans stay in this browser. No real account, money movement, or notification service is connected.</div>`);
-}
-function settings() {
-  modal(`${eyebrow('YOUR PREFERENCES','settings')}<h2 id="modal-title">A little more <em>your way.</em></h2><label class="check-label"><input type="checkbox" id="privacy" ${state.hiddenBalance?'checked':''}><span>Hide my account balance<small>A little privacy when you want it</small></span></label><label class="check-label"><input type="checkbox" id="settings-reminders" ${state.reminders?'checked':''}><span>Weekly check-in preference<small>Saved locally; no actual notifications</small></span></label><button class="button primary full" data-action="close">All set ${icon('check')}</button>`);
-}
-function requestPlan(request) {
-  if(!request.trim()) return;
-  if(!/(?:dining|dinners|restaurants|save|extra|smallest|protect)/i.test(request)) {
-    state.note='Try “Keep dining” or “Save $50 a month”, or choose an approach above.';
-    $('#reply').innerHTML=`<p class="planner-note">${state.note}</p>`;
-    return;
-  }
-  snapshot();
-  const p=suggestPlan(state.goal,state.protected,request);
-  state.adjustments=validateAdjustments(p.adjustments,p.protectedCategories);
-  state.protected=p.protectedCategories; state.selected='custom';
-  state.note=p.explanation;
-  updateStage();
-  $('#request').value='';
-}
-function savePlan() {
-  const r=result();
-  state.plan={adjustments:{...state.adjustments},protected:[...state.protected],monthlyExtra:r.monthlyExtra,savedAt:new Date().toISOString()};
-  persist(); navigate('success');
-}
-function download() {
-  const r=simulate(state.goal,state.plan.adjustments);
-  const text=`MONEY MOVES\n${state.goal.name}\n\nGoal: ${money(state.goal.target)}\nProjected: ${money(r.projected)} in ${state.goal.months} months\nAlready saved: ${money(state.goal.saved)}\nScheduled savings: ${money(state.goal.base)}/month\n${Object.entries(state.plan.adjustments).map(([k,v])=>`${k}: ${money(v)} less per month`).join('\n')}\n\nSample data. No money transferred. Projection assumes all reductions are saved, no withdrawals, and no interest.`;
-  const url=URL.createObjectURL(new Blob([text],{type:'text/plain'}));
-  const anchor=document.createElement('a'); anchor.href=url;anchor.download='Money-Moves-My-Plan.txt';anchor.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
-}
+function savePlan(){state.plan={adjustments:{...validateAdjustments(state.adjustments,state.protected)},protected:[...state.protected],monthlyExtra:result().monthlyExtra,savedAt:new Date().toISOString()};persist();navigate('success');}
 const actions={
-  home:()=>navigate('overview'), begin:()=>{selectScenario('small',false);state.history=[];navigate('planner');}, evidence, review, 'edit-goal':editGoal, close:closeModal, about, settings,
-  'fine-tune':()=>{state.fineTune=!state.fineTune;updateStage();},
-  undo:()=>{const previous=state.history.pop();if(previous){Object.assign(state,previous);updateStage();}},
-  save:savePlan, download,
+  home:()=>navigate('overview'),insight:()=>navigate('insight'),'back-insight':()=>navigate('insight'),
+  begin:()=>{chooseScenario('small',false);state.history=[];navigate('planner');},
+  evidence,options,adjust,ask,review,'edit-goal':editGoal,settings,save:savePlan,close:closeSheet,
+  'finish-adjust':()=>{closeSheet();updatePlan();},
+  undo:()=>{const previous=state.history.pop();if(previous){Object.assign(state,previous);updatePlan();}},
+  privacy:()=>{state.hiddenBalance=!state.hiddenBalance;persist();render();},
   'edit-plan':()=>{if(state.plan){state.adjustments={...state.plan.adjustments};state.protected=[...(state.plan.protected||[])];state.selected='custom';}state.note='';navigate('planner');},
-  calculation:()=>{const r=result();modal(`${eyebrow('THE MATH','chart')}<h2 id="modal-title">Simple, on purpose.</h2><div class="formula">${money(state.goal.saved)} + (${money(state.goal.base)} + ${money(r.monthlyExtra)}) × ${state.goal.months}<strong>= ${money(r.projected)}</strong></div><p>Already saved + (scheduled savings + your adjustments) × months remaining.</p><p class="modal-note">Assumes you save the full spending reduction consistently. No interest, withdrawals, or automatic transfers.</p>`);},
-  notifications:()=>modal(`${eyebrow('JUST WHAT MATTERS','bell')}<h2 id="modal-title">One thing worth a look.</h2><button class="notification-card" data-action="evidence">${icon('spark')}<span><strong>Dining is $120 above usual.</strong><small>Your getaway goal is still within reach.</small></span>${icon('arrow')}</button>`),
-  account:()=>modal(`${eyebrow('EVERYDAY CHECKING','wallet')}<h2 id="modal-title">Your everyday, covered.</h2><div class="review-stat"><strong>${state.hiddenBalance?'••,•••.••':'$8,452.80'}</strong><span>Available balance · •• 4829</span></div><p class="modal-note">Sample account for Alex Chen. No real accounts connected.</p><button class="button primary full" data-nav="activity">View activity ${icon('arrow')}</button>`),
-  pause:()=>modal(`${eyebrow('YOUR PACE','pause')}<h2 id="modal-title">Pause this plan?</h2><p>Your savings goal stays. You can start a new plan whenever you’re ready.</p><button class="button primary full" data-action="confirm-pause">Pause plan</button><button class="button secondary full" data-action="close">Keep it going</button>`),
-  'confirm-pause':()=>{state.plan=null;persist();closeModal();renderMain();toast('Plan paused. Your goal is still here.');},
+  about:()=>sheet(`<span class="overline">SCENARIO MODE</span><h2 id="sheet-title">A smarter way to explore.</h2><p>This prototype uses sample transactions and deterministic planning rules. It is not connected to a live AI model or bank account.</p><p>Try a suggestion, protect dining, or ask for a monthly savings amount. Calculations use your goal and scheduled savings.</p><p class="sheet-note">Plans stay in this browser. No real money moves and no notifications are scheduled.</p>`),
+  calculation:()=>{const r=result();sheet(`<span class="overline">BEHIND THE FORECAST</span><h2 id="sheet-title">The math stays simple.</h2><div class="math-lines"><div><span>Already saved</span><b>${money(state.goal.saved)}</b></div><div><span>Scheduled savings</span><b>${money(state.goal.base)} / month</b></div><div><span>Your adjustments</span><b>+${money(r.monthlyExtra)} / month</b></div><div><span>Months to go</span><b>${state.goal.months}</b></div><div class="math-total"><span>Projected</span><b>${money(r.projected)}</b></div></div><p class="sheet-note">${money(state.goal.saved)} + (${money(state.goal.base)} + ${money(r.monthlyExtra)}) × ${state.goal.months}. Assumes you save all reductions consistently, with no interest or withdrawals.</p>`);},
+  account:()=>sheet(`<span class="overline">EVERYDAY CHECKING · •• 4829</span><h2 id="sheet-title">${state.hiddenBalance?'••,•••.••':'$8,452.80'}</h2><p>Available balance · Alex Chen</p><p class="sheet-note">Sample account. No real bank account connected.</p><button class="button primary" data-nav="activity">View activity ${icon('arrow')}</button>`),
+  notifications:()=>sheet(`<span class="overline">NOTIFICATIONS</span><h2 id="sheet-title">One thing worth a look.</h2><button class="notification" data-action="insight">${agentLabel()}<strong>Dining is $120 above usual.</strong><span>See what that means for your getaway. ${icon('arrow')}</span></button>`),
+  pause:()=>sheet(`<span class="overline">YOUR PACE</span><h2 id="sheet-title">Pause this plan?</h2><p>Your goal stays here. Start again whenever you’re ready.</p>${button('Pause plan','confirm-pause','pause')}${button('Keep my plan','close','','secondary')}`),
+  'confirm-pause':()=>{state.plan=null;persist();closeSheet();render();toast('Plan paused. Your goal is still here.');},
 };
 document.addEventListener('click',event=>{
-  const button=event.target.closest('button,a');if(!button)return;
-  if(button.dataset.nav){event.preventDefault();navigate(button.dataset.nav);return;}
-  if(button.dataset.action){event.preventDefault();actions[button.dataset.action]?.();return;}
-  if(button.dataset.scenario){selectScenario(button.dataset.scenario);updateStage();return;}
-  if(button.dataset.protect){snapshot();const category=button.dataset.protect;state.protected=state.protected.includes(category)?state.protected.filter(c=>c!==category):[...state.protected,category];if(state.protected.includes(category))state.adjustments[category]=0;state.selected='custom';state.note='';updateStage();}
+  const el=event.target.closest('button,a');if(!el){if(event.target.classList.contains('overlay'))closeSheet();return;}
+  if(el.dataset.nav){event.preventDefault();navigate(el.dataset.nav);return;}
+  if(el.dataset.action){event.preventDefault();actions[el.dataset.action]?.();return;}
+  if(el.dataset.scenario){chooseScenario(el.dataset.scenario);updatePlan();return;}
+  if(el.dataset.sheetScenario){chooseScenario(el.dataset.sheetScenario);closeSheet();updatePlan();return;}
+  if(el.dataset.example){$('#request').value=el.dataset.example;$('#request').focus();return;}
+  if(el.dataset.protect){snapshot();const c=el.dataset.protect;state.protected=state.protected.includes(c)?state.protected.filter(x=>x!==c):[...state.protected,c];if(state.protected.includes(c))state.adjustments[c]=0;state.selected='custom';adjust();}
 });
-document.addEventListener('click',event=>{if(event.target.classList.contains('overlay'))closeModal();});
 document.addEventListener('input',event=>{
-  if(event.target.id==='search'){state.search=event.target.value;$('#activity-list').innerHTML=activityList();return;}
-  if(event.target.dataset.slider){
-    const category=event.target.dataset.slider;
-    state.adjustments[category]=Number(event.target.value);state.selected='custom';
-    const focused=event.target;
-    // Keep the active control in place; update only dependent values while dragging.
-    focused.style.setProperty('--fill',Number(focused.value)/limits[category]*100+'%');
-    focused.parentElement.querySelector('span').textContent=`${money(Number(focused.value))} less`;
-    const row=focused.parentElement.previousElementSibling;
-    row.querySelector('.budget-change').textContent=Number(focused.value)?`−${money(Number(focused.value))}`:'No change';
-    row.querySelector('.budget-name span').textContent=`${money(spending.find(c=>c.name===category).total)} → ${money(spending.find(c=>c.name===category).total-Number(focused.value))} / month`;
-    $('.forecast').outerHTML=new DOMParser().parseFromString(planContent(),'text/html').querySelector('.forecast').outerHTML;
-    $('.forecast-line').style.animation='none';
-    document.querySelectorAll('[data-scenario]').forEach(el=>{el.classList.remove('selected');el.setAttribute('aria-pressed','false');});
-    $('.plan-suggestion h2').textContent=explanation();
-  }
+  const el=event.target;
+  if(el.id==='search'){state.search=el.value;$('#activity-results').innerHTML=activityResults();}
+  if(el.dataset.slider){const c=el.dataset.slider;state.adjustments[c]=Number(el.value);state.selected='custom';el.style.setProperty('--fill',Number(el.value)/limits[c]*100+'%');el.setAttribute('aria-valuetext',`${money(Number(el.value))} less per month`);$(`[data-amount="${c}"]`).textContent=money(Number(el.value));$('#adjust-total').textContent=money(result().projected);}
 });
 document.addEventListener('pointerdown',event=>{if(event.target.dataset.slider)snapshot();});
-document.addEventListener('keydown',event=>{
-  if(event.target.dataset.slider&&['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End'].includes(event.key))snapshot();
-  if(event.key==='Escape')closeModal();
-  if(event.key==='Tab'&&$('.modal')){const fields=[...$('.modal').querySelectorAll('button,input,select,a')].filter(el=>!el.disabled);const first=fields[0],last=fields.at(-1);if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}}
-});
 document.addEventListener('change',event=>{
-  if(event.target.id==='category'){state.category=event.target.value;$('#activity-list').innerHTML=activityList();}
-  if(event.target.id==='reminders'){state.reminders=event.target.checked;$('#day').disabled=!state.reminders;}
-  if(event.target.id==='day')state.day=event.target.value;
-  if(event.target.id==='privacy'){state.hiddenBalance=event.target.checked;persist();renderMain();}
-  if(event.target.id==='settings-reminders'){state.reminders=event.target.checked;persist();}
-  if(event.target.dataset.slider){$('.undo').disabled=false;}
+  const el=event.target;
+  if(el.id==='category'){state.category=el.value;$('#activity-results').innerHTML=activityResults();}
+  if(el.id==='reminders'){state.reminders=el.checked;$('#day').disabled=!state.reminders;}
+  if(el.id==='day')state.day=el.value;
+  if(el.id==='privacy'){state.hiddenBalance=el.checked;persist();render();}
+  if(el.id==='settings-reminders'){state.reminders=el.checked;persist();}
+});
+document.addEventListener('keydown',event=>{
+  if(event.key==='Escape')closeSheet();
+  if(event.target.dataset.slider&&['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End'].includes(event.key))snapshot();
+  if(event.key==='Tab'&&$('.sheet')){
+    const fields=[...$('.sheet').querySelectorAll('button,input,select,textarea,a')].filter(el=>!el.disabled);
+    const first=fields[0],last=fields.at(-1);
+    if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}
+    else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}
+  }
 });
 document.addEventListener('submit',event=>{
-  if(event.target.id==='request-form'){event.preventDefault();requestPlan(new FormData(event.target).get('request'));}
-  if(event.target.id==='goal-form'){event.preventDefault();const form=new FormData(event.target);state.goal={...state.goal,name:String(form.get('name')).trim()||INITIAL_GOAL.name,target:Number(form.get('target')),months:Number(form.get('months'))};if(state.page==='planner')selectScenario('small',false);persist();closeModal();renderMain(true);toast('Your goal is updated.');}
+  if(event.target.id==='request-form'){event.preventDefault();requestPlan(String(new FormData(event.target).get('request')));}
+  if(event.target.id==='goal-form'){
+    event.preventDefault();const form=new FormData(event.target);
+    state.goal={...state.goal,name:String(form.get('name')).trim()||INITIAL_GOAL.name,target:Number(form.get('target')),months:Number(form.get('months'))};
+    if(state.page==='planner')chooseScenario('small',false);persist();closeSheet();render();toast('Goal updated.');
+  }
 });
-shell();
+render();

@@ -10,7 +10,7 @@ const port = Number(process.env.PORT || (portArg >= 0 && process.argv[portArg + 
 const hostArg = process.argv.indexOf('--host');
 const host = process.env.HOST || (hostArg >= 0 && process.argv[hostArg + 1]) || (process.env.SITES_MANAGED_LINUX_CONTAINER === '1' ? '0.0.0.0' : '127.0.0.1');
 const clients = new Set();
-const files = new Set(['index.html', 'app.js', 'data.js', 'icons.js', 'plan-engine.js', 'styles.css']);
+const files = new Set(['index.html', 'app.js', 'data.js', 'icons.js', 'plan-engine.js', 'styles.css', 'preview.html']);
 const types = { html: 'text/html', js: 'text/javascript', css: 'text/css' };
 
 createServer(async (request, response) => {
@@ -21,7 +21,7 @@ createServer(async (request, response) => {
     response.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
     response.write(': connected\n\n'); clients.add(response); request.on('close', () => clients.delete(response)); return;
   }
-  const file = path === '/' ? 'index.html' : path.slice(1);
+  const file = path === '/' ? 'index.html' : path === '/preview' ? 'preview.html' : path.slice(1);
   if (!files.has(file)) { response.writeHead(404).end('Not found'); return; }
   try {
     let content = await readFile(join(root, file));
