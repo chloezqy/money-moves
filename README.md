@@ -1,42 +1,69 @@
 # Money Moves · ABC Bank
 
-A high-fidelity, responsive frontend prototype that expands Chloe Zhu’s four-step banking storyboard into a working experience.
+A responsive banking prototype built around a simple idea: explore a useful next move instead of reading another dashboard.
 
-## Experience
+## Run on your desktop
 
-Overview → dining insight → evidence → customizable monthly plan → explicit review → saved plan.
+Requires Node.js 20 or newer. There are no dependencies to install.
 
-The prototype includes editable savings goals, category protection, instant what-if calculations, an alternative-plan interaction, transaction search and filtering, account privacy preferences, plan export, edit and pause flows, keyboard focus handling, and browser-local persistence. Desktop has a persistent sidebar; mobile has bottom navigation.
+```bash
+git clone https://github.com/chloezqy/money-moves.git
+cd money-moves
+npm run dev
+```
 
-## Run
+Open **http://127.0.0.1:5173**. Editing an application file automatically reloads the page. Stop with Ctrl+C. If you already cloned the repository, run `git pull` first.
 
-Serve the repository root using any static web server. There is no build step and no runtime dependency. For example, `python3 -m http.server 8000`.
+To choose another port: `npm run dev -- --port 3000`.
 
-Run financial and data checks with `npm test` (Node 20+).
+## Try the flow
 
-## Structure
+1. Choose **Find my next move** from the overview.
+2. Switch between **The smallest change**, **Keep the dinners**, and **A little breathing room**.
+3. Watch the budgets and forecast change together. Use **Undo** to go back.
+4. Try **Keep dining. Save $50 a month** to see an honest remaining savings gap.
+5. Open **Fine-tune** to adjust targets directly, or protect an individual category.
+6. Choose **This feels right**, review the targets, and save your plan.
+7. Reload. Your plan and preferences remain in this browser.
 
-- `app.js`: views, state, events, dialogs, browser persistence.
-- `styles.css`: responsive visual system and interaction states.
-- `data.js`: synthetic account, transactions, and goal data.
-- `plan-engine.js`: deterministic calculation and constraint-aware planning functions.
-- `icons.js`: original SVG icons and vacation illustration.
-- `planning.test.js`: meaningful financial and constraint checks.
+Evidence, calculations, and assumptions are available on demand. Goals, activity search, plan editing, pause, export, and balance privacy also work.
 
-## Numbers and assumptions
+## Interaction and visual design
 
-Dining is $420 versus a usual $300, preserving the original storyboard. The supporting synthetic purchases reconcile with each category and the $1,280 spending total. The vacation goal starts at $400 of $1,000 with four months left. A $90 existing monthly savings contribution projects $760. An extra $60 a month closes the $240 gap.
+The overview centers one relevant suggestion. Planning happens in one workspace with three clear starting points, a live forecast, and optional controls. A short review dialog replaces the separate review page.
 
-Projection = already saved + (scheduled monthly contribution + monthly spending adjustments) × remaining months. No interest, withdrawals, or automatic transfers are assumed. Reducing spending only supports the projection if the customer actually saves the difference.
+Warm white, sage, and deep green keep the interface quiet. DM Sans carries functional text; Instrument Serif adds a little personality to key headlines. View Transitions, subtle chart motion, focus preservation, and a compact success state provide feedback. The active slider stays mounted during dragging. Reduced-motion preferences disable nonessential motion.
 
-## Scope and honesty
+## Files
 
-This release prioritizes visual design and a complete functional frontend. The planner is a deterministic, constraint-aware demo, **not a live language model or an AI agent**. It recognizes protected dining and requested monthly savings amounts. Arbitrary requests are redirected to supported examples or the controls. The interface discloses this.
+- `app.js`: views, event handling, accessible dialogs, undo, and local persistence.
+- `styles.css`: responsive visual system, states, and motion.
+- `data.js`: synthetic account, transactions, and savings goal.
+- `plan-engine.js`: deterministic scenarios, constraints, and calculations.
+- `icons.js`: SVG icons and vacation illustration.
+- `dev.mjs`: dependency-free local development server with automatic reload.
+- `planning.test.js`: calculation, constraint, and transaction consistency checks.
 
-No bank connection, financial action, actual notification, or server persistence exists. Saving a plan stores budgets and preferences in localStorage. The weekly reminder is only a stored preference. Fonts are optional Google Fonts with system fallbacks. No user data is sent to a model.
+## Calculation
 
-A live tool-calling model can replace `suggestPlan` behind a server endpoint while preserving `simulate`, validation rules, and the existing view contract. Do not put model API keys in frontend code.
+Dining is $420 versus a usual $300. Transactions reconcile with the category totals and $1,280 total spending. The goal starts at $400 of $1,000, with four months remaining and a $90 scheduled monthly contribution.
+
+`Projected savings = saved + (scheduled contribution + monthly spending reductions) × months`
+
+The baseline projects $760. An extra $60/month closes the $240 gap. A $50/month adjustment projects $960 and correctly reports $40 still to save. Forecasts assume all reductions are saved consistently, with no interest or withdrawals. They are not guaranteed outcomes or automatic transfers.
+
+## Prototype scope
+
+**Scenario mode is deterministic, not a live AI agent.** It recognizes protected dining and requested savings amounts. Unsupported requests receive example prompts without silently changing the plan. The structure is ready for a server-backed agent while retaining deterministic calculations and constraint validation.
+
+No real bank accounts, financial actions, or notification services are connected. Saving uses localStorage; the weekly check-in is a stored preference only. No model API key belongs in frontend code. Fonts load from Google Fonts with system fallbacks.
+
+The local server serves only the application's public files. It does not expose environment files, repository metadata, or arbitrary filesystem paths. It binds to localhost by default on your desktop.
 
 ## Verification
 
-Financial calculations, infeasible plans, protected categories, valid ranges, and transaction totals have automated coverage. JavaScript syntax checks pass. Browser visual QA could not be completed because the environment blocked browser access to the local preview; viewport layouts still require a visual review on the deployed prototype.
+```bash
+npm test
+```
+
+Six automated checks cover projections, infeasible goals, protected categories, allowed ranges, and transaction totals. JavaScript syntax checks pass. Browser checks cover the desktop overview, scenario selection, preference requests, honest gap reporting, undo, review, save, and restoration after reload. Responsive styles are implemented; a separate mobile viewport visual review remains outstanding.

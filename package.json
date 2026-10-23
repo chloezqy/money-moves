@@ -3,6 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test planning.test.js"
+    "test": "node --test planning.test.js",
+    "dev": "node dev.mjs",
+    "start": "node dev.mjs"
   }
 }
