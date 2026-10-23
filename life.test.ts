@@ -268,6 +268,9 @@ test("mocked live tool loop grounds A–D and preserves context", async () => {
   assert.equal(result.state.event?.amount, 200);
 });
 test("mocked E–F, tool bypass, malformed output and service failure are safe", async () => {
+  const invented = await runLifeAgent(base(),mock({...initialLifeState(),shoppingReduction:80}));
+  assert.equal(invented.source,"fallback");
+  assert.equal(invented.state.shoppingReduction,null);
   const contradiction = {
     ...base(),
     request: "Never reduce dining. Cut dining by $100.",
@@ -362,4 +365,24 @@ test("direct constraints respect buffers, exact cents and fund completion after 
     assert.ok(path.points[checkpoint] >= 1000);
     assert.equal(path.projection.progress, 100);
   }
+});
+
+test("later paths with identical spending changes are not presented as distinct choices", () => {
+  const state = { ...initialLifeState(), shoppingReduction: 80 };
+  const paths = generateFeasiblePaths(initialGoal, defaultPreferences(), state);
+  for (const path of paths)
+    assert.ok(
+      !paths.some(
+        (other) =>
+          other.months < path.months &&
+          JSON.stringify(other.adjustments) ===
+            JSON.stringify(path.adjustments),
+      ),
+    );
+});
+
+test("fractional monetary values retain cents in comparisons", async () => {
+  const { money } = await import("./finance");
+  assert.equal(money(133.34), "$133.34");
+  assert.equal(money(120), "$120");
 });

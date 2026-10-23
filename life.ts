@@ -254,7 +254,7 @@ export function generateFeasiblePaths(
         tradeoffs: [
           months === horizon
             ? "Original deadline preserved."
-            : `${months - horizon} additional months before your planned goal date.`,
+            : `${months - horizon} additional ${months - horizon === 1 ? "month" : "months"} before your planned goal date.`,
           Object.values(adjustments).some((n) => n > 0)
             ? "Spending reductions need to be saved consistently."
             : "No new category reductions.",
@@ -311,7 +311,14 @@ export function generateFeasiblePaths(
         paths.splice(1, 0, balanced);
     }
   }
-  return paths;
+  return paths.filter(
+    (path) =>
+      !paths.some(
+        (other) =>
+          other.months < path.months &&
+          adjustable.every((c) => other.adjustments[c] === path.adjustments[c]),
+      ),
+  );
 }
 
 // Deliberately limited, labeled parser for demos. Live interpretation is model-driven.

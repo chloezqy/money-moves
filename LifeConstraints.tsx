@@ -21,7 +21,7 @@ export function LifeConstraints({
   return (
     <div className="life-constraints">
       <div>
-        <span className="constraint-type">PROTECTED</span>
+        <span className="constraint-type">What matters</span>
         <div className="life-protections">
           {[
             "Dining",
@@ -62,7 +62,9 @@ export function LifeConstraints({
       </div>
       {state.event && (
         <div className="event-editor">
-          <span className="constraint-type">UPCOMING · {state.event.name}</span>
+          <span className="constraint-type">
+            What’s changing · {state.event.name}
+          </span>
           <div className="event-fields">
             <label>
               Amount{" "}
@@ -160,7 +162,7 @@ export function LifeConstraints({
       )}
       <div className="deadline-editor">
         <span>
-          <span className="constraint-type">{goal.name.toUpperCase()}</span>
+          <span className="constraint-type">What can flex · {goal.name}</span>
           <b>
             {money(state.target ?? goal.target)} ·{" "}
             {dateLabel(addMonths(state.horizon ?? goal.months))}

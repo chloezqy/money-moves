@@ -100,3 +100,15 @@ Run the live suite separately; it makes paid API calls and skips when no key is 
 All account data is synthetic. October figures cover days 1–23 and are not normalized full-month spending estimates; the UI labels the observation period. The model can misinterpret flexible language, so constraints are inspectable/editable before activation. Example mode only understands the documented demo phrases and a small set of patterns. The prototype supports one life event, one exact category adjustment (Shopping), and up to sixty monthly checkpoints. An otherwise achievable real-world goal due tomorrow is conservatively infeasible in this monthly model. Missing expense amounts ask for clarification. Unsupported requests may require restating or editing constraints directly.
 
 No interest, investment return, income changes, future checking cash flow, real notifications or transfers are modeled. There is no authentication or production security infrastructure. API input is capped and origin-checked for local development. Chart text alternatives, keyboard controls, dialog focus handling and reduced motion are implemented; this is not a formal accessibility audit.
+
+## Final visual refinement
+
+The planner now uses progressive disclosure: compact goal context, a conversational composer that collapses after interpretation, an editable situation summary, and grouped priorities behind one disclosure. Possible Futures is the primary decision surface, with a larger mobile chart and date/contribution/spending-change comparisons. Clicking a trajectory or using Enter/Space selects the same validated scenario as its comparison button. Selected paths use cobalt; alternatives use muted copper; the current projection is dashed gray. SVG geometry remains a linear monthly projection, including negative balances in the displayed domain when necessary.
+
+Navigation, financial figures, screen headings and controls use sans serif; the initial “What changed?” moment retains restrained serif typography. Home presents a concise, evidence-based dining observation. Review shows the chosen future, exact targets and funding treatment, with check-in settings progressively disclosed. Active Plan puts edit/pause controls immediately below progress and shows the total monthly savings. Home and Goals display the approved plan’s deadline while the original goal remains available for comparison.
+
+The planner review action appears only for a validated future and is hidden during composition or processing. It sits in normal document flow so it cannot obscure the input or chart. Textareas resize to the request, reduced motion is respected, and result focus targets the compact explorer heading rather than its entire container.
+
+QA found and fixed redundant later scenarios with identical adjustments, an unsupported model-created exact shopping constraint, and rounded-away cents in monetary labels. These are covered by regression checks. No synthetic spending data was modified.
+
+Screenshots and the visual QA record are in [qa/polish](qa/polish/README.md), covering all nine requested states at 390 × 844 and 1440px desktop width.

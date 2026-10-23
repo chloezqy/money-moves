@@ -7,33 +7,50 @@ export function FuturePaths({
   selected,
   goal,
   state,
+  onSelect,
+  disabled = false,
 }: {
   paths: FutureScenario[];
   selected: FutureScenario | null;
   goal: Goal;
   state: LifeState;
+  disabled?: boolean;
+  onSelect: (path: FutureScenario) => void;
 }) {
   const horizon = Math.max(goal.months, ...paths.map((p) => p.months));
   const target = state.target ?? goal.target;
-  const max = Math.max(target * 1.12, ...paths.flatMap((p) => p.points));
-  const x = (m: number) => 44 + (m / horizon) * 520;
-  const y = (v: number) => 218 - (v / max) * 180;
-  const line = (points: number[]) =>
-    points
-      .map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`)
-      .join(" ");
   const current = simulateLifeEvent(
     goal,
     state,
     emptyAdjustments(),
     horizon,
   ).points;
-  const colors = ["#4259c9", "#ad7856", "#498478"];
+  const minimum = Math.min(0, ...current, ...paths.flatMap((p) => p.points));
+  const max = Math.max(
+    target * 1.12,
+    ...current,
+    ...paths.flatMap((p) => p.points),
+  );
+  const x = (m: number) => 40 + (m / horizon) * 320;
+  const y = (v: number) => 218 - ((v - minimum) / (max - minimum)) * 180;
+  const line = (points: number[]) =>
+    points
+      .map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`)
+      .join(" ");
+  const colors = paths.map((p) =>
+    p.id === selected?.id ? "#4259c9" : "#9b7c63",
+  );
   return (
     <figure className="future-chart">
+      <div className="chart-context">
+        <span>Vacation Fund trajectory</span>
+        <b>
+          {money(goal.saved)} → {money(target)}
+        </b>
+      </div>
       <svg
-        viewBox="0 0 610 290"
-        role="img"
+        viewBox="0 0 390 290"
+        role="group"
         aria-labelledby="future-chart-title future-chart-desc"
       >
         <title id="future-chart-title">
@@ -51,11 +68,11 @@ export function FuturePaths({
           {state.event &&
             `Event is ${money(state.event.amount)} in month ${state.event.month}, funded from ${state.event.funding}.`}
         </desc>
-        {[0, goal.saved, target].map((v) => (
+        {[minimum, ...(minimum < 0 ? [0] : []), goal.saved, target].map((v) => (
           <g key={v}>
             <line
-              x1="44"
-              x2="566"
+              x1="40"
+              x2="360"
               y1={y(v)}
               y2={y(v)}
               stroke="#deded7"
@@ -103,17 +120,42 @@ export function FuturePaths({
           fill="none"
         />
         {paths.map((p, i) => (
-          <g key={p.id} opacity={selected?.id === p.id ? 1 : 0.5}>
+          <g
+            key={p.id}
+            className="trajectory-option"
+            role="button"
+            tabIndex={disabled ? -1 : 0}
+            aria-disabled={disabled}
+            aria-label={`Explore ${p.title}`}
+            aria-pressed={selected?.id === p.id}
+            onClick={() => {
+              if (!disabled) onSelect(p);
+            }}
+            onKeyDown={(e) => {
+              if (!disabled && (e.key === "Enter" || e.key === " ")) {
+                e.preventDefault();
+                onSelect(p);
+              }
+            }}
+            opacity={selected?.id === p.id ? 1 : 0.5}
+          >
+            <path
+              d={line(p.points)}
+              stroke="transparent"
+              strokeWidth="20"
+              fill="none"
+              pointerEvents="stroke"
+            />
             <path
               d={line(p.points)}
               stroke={colors[i]}
-              strokeWidth={selected?.id === p.id ? 3.5 : 2}
+              strokeWidth={selected?.id === p.id ? 5 : 2.5}
               fill="none"
             />
             <circle
               cx={x(p.months)}
               cy={y(p.points.at(-1)!)}
-              r={selected?.id === p.id ? 6 : 4}
+              r={selected?.id === p.id ? 8 : 5}
               fill={colors[i]}
               stroke="#fbfaf7"
               strokeWidth="2"

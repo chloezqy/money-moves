@@ -4,7 +4,7 @@ import { ScenarioDetails } from "./ScenarioDetails";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Button, Icon } from "./components";
 import { type Goal, type Preferences, type Scenario } from "./model";
-import { dateLabel, money } from "./finance";
+import { addMonths, dateLabel, money } from "./finance";
 import {
   initialLifeState,
   limitations,
@@ -64,6 +64,8 @@ export function LifeHappens({
         }
       : null,
   );
+  const [composerOpen, setComposerOpen] = useState(!hasSavedConstraints);
+  const [constraintsOpen, setConstraintsOpen] = useState(false);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [exampleMode, setExampleMode] = useState(false);
@@ -76,8 +78,15 @@ export function LifeHappens({
   const input = useRef<HTMLTextAreaElement>(null);
   useEffect(() => () => controller.current?.abort(), []);
   useEffect(() => {
-    onBusy(busy);
-  }, [busy, onBusy]);
+    const field = input.current;
+    if (field) {
+      field.style.height = "auto";
+      field.style.height = `${Math.min(260, Math.max(128, field.scrollHeight))}px`;
+    }
+  }, [draft, composerOpen]);
+  useEffect(() => {
+    onBusy(busy || composerOpen);
+  }, [busy, composerOpen, onBusy]);
   useEffect(() => {
     try {
       sessionStorage.setItem("money-moves-life", JSON.stringify(state));
@@ -94,7 +103,8 @@ export function LifeHappens({
   const chosen = paths.find((p) => p.id === selected.id) || null;
   useEffect(() => {
     if (hasSavedConstraints && !paths.length) onClear();
-    else if(hasSavedConstraints && paths.length && !chosen) onSelect(paths[0],effectivePreferences);
+    else if (hasSavedConstraints && paths.length && !chosen)
+      onSelect(paths[0], effectivePreferences);
   }, []);
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -140,9 +150,17 @@ export function LifeHappens({
         });
       else onClear();
       setDraft("");
-      requestAnimationFrame(() =>
-        output.current?.focus({ preventScroll: true }),
-      );
+      setComposerOpen(Boolean(response.clarification));
+      requestAnimationFrame(() => {
+        output.current?.focus({ preventScroll: true });
+        output.current?.scrollIntoView({
+          block: "start",
+          behavior: window.matchMedia("(prefers-reduced-motion: reduce)")
+            .matches
+            ? "instant"
+            : "smooth",
+        });
+      });
     } catch (e) {
       if (
         requestSequence === sequence.current &&
@@ -178,7 +196,10 @@ export function LifeHappens({
     else onClear();
   }
   return (
-    <section className="life-workspace" aria-labelledby="life-title">
+    <section
+      className={`life-workspace ${result ? "has-futures" : "is-starting"}`}
+      aria-labelledby="life-title"
+    >
       <div className="life-kicker">
         <span className="branch-mark">⑂</span> LIFE HAPPENS{" "}
         <span>
@@ -194,76 +215,105 @@ export function LifeHappens({
         </span>
       </div>
       <h2 id="life-title">
-        Life happens.
-        <br />
-        <em>Your plan can adapt.</em>
+        {result ? "Your possible futures" : "What changed?"}
       </h2>
-      <label className="life-mode">
-        <input
-          type="checkbox"
-          checked={isExample}
-          disabled={busy || mode === "example"}
-          onChange={(e) => setExampleMode(e.target.checked)}
-        />
-        Use Example mode{" "}
-        <small>Scripted demo · deterministic calculations</small>
-      </label>
-      <p className="life-intro">
-        A wedding. A change of plans. A little more life.
-        <br />
-        Explore what’s possible, without losing what matters.
-      </p>
-      <form className="life-input" onSubmit={submit}>
-        <label htmlFor="life-request">
-          {result ? "What else has changed?" : "What changed in your life?"}
-        </label>
-        <textarea
-          id="life-request"
-          ref={input}
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          maxLength={1000}
-          disabled={busy}
-          placeholder={
-            result
-              ? "Actually, I could reduce shopping by $30, but keep my vacation date…"
-              : "I have a wedding next month, but I still want to save for my vacation…"
-          }
-          required
-        />
-        <div className="life-input-footer">
-          <small>
-            {isExample
-              ? "Scripted interpretation · real calculations"
-              : "Your words → preferences → calculated paths"}
-          </small>
-          <Button type="submit" disabled={busy || !draft.trim()}>
-            {busy ? "Exploring…" : result ? "Update paths" : "Explore futures"}
-            <Icon name="arrow" />
-          </Button>
-        </div>
-      </form>
-      <div className="life-prompts">
-        {[
-          ["Unexpected expense", flagship],
-          ["Protect a priority", "Keep dining unchanged. Find another way."],
-          [
-            "Change my timeline",
-            "I would prefer a later vacation date to keep my lifestyle.",
-          ],
-        ].map(([label, text]) => (
+      {result && (
+        <div className="situation-summary">
+          <div>
+            <span>Your situation</span>
+            <strong>
+              {state.event
+                ? `${state.event.name} · ${money(state.event.amount)}`
+                : "Your priorities, reflected"}
+            </strong>
+            <small>
+              {state.event
+                ? `In ${new Date(`${addMonths(state.event.month)}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", timeZone: "UTC" })} · ${fundingLabels[state.event.funding]}`
+                : "Explore the tradeoffs that work for you"}
+            </small>
+          </div>
           <button
-            key={label}
-            disabled={busy}
+            type="button"
+            aria-expanded={composerOpen}
             onClick={() => {
-              setDraft(text);
-              input.current?.focus();
+              setComposerOpen(!composerOpen);
+              requestAnimationFrame(() => input.current?.focus());
             }}
           >
-            {label}
-            <span>↗</span>
+            {" "}
+            {composerOpen ? "Close" : "Update"} <Icon name="edit" />
           </button>
-        ))}
+        </div>
+      )}
+      <div className="life-composer" hidden={!composerOpen}>
+        <label className="life-mode">
+          <input
+            type="checkbox"
+            checked={isExample}
+            disabled={busy || mode === "example"}
+            onChange={(e) => setExampleMode(e.target.checked)}
+          />
+          Use Example mode <small>Scripted interpretation</small>
+        </label>
+        <p className="life-intro">
+          Tell us what’s happening. We’ll explore how it affects your goal.
+        </p>
+        <form className="life-input" onSubmit={submit}>
+          <label htmlFor="life-request">
+            {result ? "What else has changed?" : "What changed in your life?"}
+          </label>
+          <textarea
+            id="life-request"
+            ref={input}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            maxLength={1000}
+            disabled={busy}
+            placeholder={
+              result
+                ? "Actually, I could reduce shopping by $30, but keep my vacation date…"
+                : "I have a wedding next month, but I still want to save for my vacation…"
+            }
+            required
+          />
+          <div className="life-input-footer">
+            <small>
+              {isExample
+                ? "Scripted interpretation · real calculations"
+                : "Explore freely. Nothing moves."}
+            </small>
+            <Button type="submit" disabled={busy || !draft.trim()}>
+              {busy
+                ? "Exploring…"
+                : result
+                  ? "Update paths"
+                  : "Explore futures"}
+              <Icon name="arrow" />
+            </Button>
+          </div>
+        </form>
+        <div className="life-prompts">
+          {[
+            ["Unexpected expense", flagship],
+            ["Protect a priority", "Keep dining unchanged. Find another way."],
+            [
+              "Change my timeline",
+              "I would prefer a later vacation date to keep my lifestyle.",
+            ],
+          ].map(([label, text]) => (
+            <button
+              key={label}
+              disabled={busy}
+              onClick={() => {
+                setDraft(text);
+                input.current?.focus();
+              }}
+            >
+              {label}
+              <span>↗</span>
+            </button>
+          ))}
+        </div>
       </div>
       {busy && (
         <div className="life-loading" role="status">
@@ -297,40 +347,45 @@ export function LifeHappens({
       {result && (
         <div
           className="future-results"
-          ref={output}
-          tabIndex={-1}
           aria-label="Possible futures results"
           aria-busy={busy}
         >
-          <div className="constraint-heading">
-            <span className="overline">WHAT MATTERS TO YOU</span>
-            <small>
-              {localEdit
-                ? "Calculated from your constraints"
-                : result.source === "live"
-                  ? "Interpreted by AI"
-                  : "Example interpretation · editable"}
-            </small>
-          </div>
-          <LifeConstraints goal={goal} state={state} busy={busy} edit={edit} />
+          <details
+            className="constraint-disclosure"
+            open={constraintsOpen}
+            onToggle={(e) => setConstraintsOpen(e.currentTarget.open)}
+          >
+            <summary>
+              <span>
+                <Icon name="shield" />
+                {state.protectedCategories
+                  .filter((c) => c !== "Bills" && c !== "Groceries")
+                  .join(", ") || "Essentials"}{" "}
+                protected
+              </span>
+              <span>
+                {state.deadlineHard ? "Date fixed" : "Date flexible"} · Edit
+              </span>
+            </summary>
+            <LifeConstraints
+              goal={goal}
+              state={state}
+              busy={busy}
+              edit={edit}
+            />
+          </details>
           {result.clarification ? (
             <p className="life-clarification" role="status">
               {result.clarification}
             </p>
           ) : (
             <>
-              <div className="futures-heading">
-                <span className="overline">POSSIBLE FUTURES</span>
-                <h3>
-                  One goal.
-                  <br />
-                  <em>More than one way there.</em>
-                </h3>
-                <p>
-                  {localEdit
-                    ? "Your current constraints are reflected below."
-                    : result.summary}
-                </p>
+              <div className="futures-heading" ref={output} tabIndex={-1}>
+                <h3>Choose your path</h3>
+                <span>
+                  {paths.length} calculated{" "}
+                  {paths.length === 1 ? "option" : "options"}
+                </span>
               </div>
               {paths.length > 0 ? (
                 <>
@@ -339,6 +394,8 @@ export function LifeHappens({
                     selected={chosen}
                     goal={goal}
                     state={state}
+                    disabled={busy}
+                    onSelect={(path) => onSelect(path, effectivePreferences)}
                   />
                   <div
                     className="path-options"
@@ -360,8 +417,18 @@ export function LifeHappens({
                         <span className="path-info">
                           <strong>{path.title}</strong>
                           <small>
-                            {dateLabel(path.projection.targetDate)} ·{" "}
-                            {money(path.projection.monthly)} / month total
+                            Reach {dateLabel(path.projection.targetDate)}
+                          </small>
+                        </span>
+                        <span className="path-figures">
+                          <strong>
+                            {money(path.projection.monthly)}
+                            <small>/mo</small>
+                          </strong>
+                          <small>
+                            {path.projection.extra
+                              ? `${money(path.projection.extra)} less spending`
+                              : "Spending unchanged"}
                           </small>
                         </span>
                         <span className="path-radio">
@@ -373,6 +440,19 @@ export function LifeHappens({
                   {chosen && (
                     <ScenarioDetails key={chosen.id} chosen={chosen} />
                   )}
+                  <button
+                    className="followup-action"
+                    type="button"
+                    onClick={() => {
+                      setComposerOpen(true);
+                      requestAnimationFrame(() => input.current?.focus());
+                    }}
+                  >
+                    Something else changed?
+                    <span>
+                      Update your situation <Icon name="arrow" />
+                    </span>
+                  </button>
                 </>
               ) : (
                 <p className="life-clarification" role="status">
@@ -384,7 +464,7 @@ export function LifeHappens({
             </>
           )}
           <details className="life-transparency">
-            <summary>How Money Moves built these options</summary>
+            <summary>How we explored these paths</summary>
             <p>
               {localEdit
                 ? "Current constraints were recalculated directly; no additional model call."
@@ -425,9 +505,7 @@ export function LifeHappens({
         </div>
       )}
       <p className="life-boundary">
-        Explore freely. Choose a path, review it, then decide.
-        <br />
-        No money will be transferred automatically.
+        Monthly estimates. You choose what becomes a plan.
       </p>
     </section>
   );

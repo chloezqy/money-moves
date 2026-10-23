@@ -1,3 +1,4 @@
+import { Icon } from "./components";
 import { dateLabel, money } from "./finance";
 import { currentTotals } from "./fixtures";
 import { adjustable } from "./model";
@@ -15,7 +16,10 @@ export function ScenarioDetails({ chosen }: { chosen: FutureScenario }) {
           <strong>{money(chosen.projection.monthly)}</strong>
         </div>
       </div>
-      <p>{chosen.rationale}</p>
+      <div className="selected-priorities">
+        <Icon name="shield" />
+        {chosen.life.protectedCategories.join(", ")} protected
+      </div>
       <div className="path-adjustments">
         {adjustable
           .filter((c) => chosen.adjustments[c] > 0)

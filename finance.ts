@@ -18,7 +18,7 @@ import {
   currentTransactions,
   ledger,
 } from "./fixtures";
-export const money = (value: number, cents = false) =>
+export const money = (value: number, cents = !Number.isInteger(value)) =>
   new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",

@@ -379,6 +379,13 @@ export function App() {
   }
   const flow = ["insight", "planner", "active"].includes(page);
   const p = scenario.projection;
+  const displayGoal = plan?.scenario.life
+    ? {
+        ...goal,
+        months: plan.scenario.months ?? goal.months,
+        target: plan.scenario.life.target ?? goal.target,
+      }
+    : goal;
   const nav = [
     ["home", "home", "Home"],
     ["activity", "chart", "Activity"],
@@ -386,7 +393,7 @@ export function App() {
   ] as const;
   return (
     <div
-      className={`app-shell ${flow ? "flow" : ""} ${page === "planner" ? "planner-shell" : ""}`}
+      className={`app-shell ${flow ? "flow" : ""} ${page === "planner" ? "planner-shell" : page === "active" ? "active-shell" : ""}`}
     >
       {flow ? (
         <header className="flow-header">
@@ -455,7 +462,7 @@ export function App() {
                   <Icon name="chevron" />
                 </button>
               </div>
-              <GoalProgress goal={goal} />
+              <GoalProgress goal={displayGoal} />
             </section>
             {dismissed ? (
               <div className="saved-insight">
@@ -486,7 +493,7 @@ export function App() {
                     Later
                   </button>
                 </div>
-                <h2>A small pattern changed.</h2>
+                <h2>Dining is up $120.</h2>
                 <div className="insight-metrics">
                   <div>
                     <small>DINING · OCT 1–23</small>
@@ -503,8 +510,8 @@ export function App() {
                   <b>+$120</b> above your recent pace
                 </div>
                 <p>
-                  Five more small purchases explain the difference. See the
-                  evidence, then decide whether it matters for your goal.
+                  Five more purchases explain the increase. Explore what it
+                  means for your Vacation Fund.
                 </p>
                 <Button onClick={() => go("insight")}>
                   See what changed
@@ -546,9 +553,7 @@ export function App() {
           <>
             <AgentLabel />
             <h1 ref={heading} tabIndex={-1} className="page-title">
-              A closer look
-              <br />
-              at your dining.
+              Your dining, explained.
             </h1>
             <section className="dining-figure">
               <div>
@@ -636,26 +641,18 @@ export function App() {
         )}
         {page === "planner" && (
           <>
-            <div className="flow-progress">
-              <span>Your plan</span>
-              <span>1 of 2</span>
-            </div>
-            <AgentLabel
-              example={
-                response ? response.source !== "live" : mode === "example"
-              }
-            />
-            <h1 ref={heading} tabIndex={-1} className="page-title">
-              A plan that works
-              <br />
-              for your life.
+            <h1
+              ref={heading}
+              tabIndex={-1}
+              className="page-title planner-title"
+            >
+              Plan your next move
             </h1>
-            <span className="planner-step">01 · YOUR GOAL</span>
             <div className="goal-context">
               <Icon name="plane" />
               <span>{goal.name}</span>
               <b>
-                {money(goal.saved)} / {money(goal.target)}
+                {money(goal.saved)} <span>of {money(goal.target)}</span>
               </b>
             </div>
             <LifeHappens
@@ -674,6 +671,9 @@ export function App() {
             {!scenario.life && !lifeBlocked && (
               <details className="manual-planner">
                 <summary>Or adjust your plan manually</summary>
+                <Button secondary onClick={() => setModal("review")}>
+                  Review manual plan
+                </Button>
                 <p className="recommendation-copy">
                   {money(p.extra)} more each month.{" "}
                   {preferences.protectedCategories.includes("Dining")
@@ -948,15 +948,17 @@ export function App() {
                 </section>
               </details>
             )}
-            <Dock note="Choose freely. No money will be transferred automatically.">
-              <Button
-                disabled={lifeBlocked || lifeBusy}
-                onClick={() => setModal("review")}
-              >
-                Review my plan
-                <Icon name="arrow" />
-              </Button>
-            </Dock>
+            {scenario.life && !lifeBlocked && !lifeBusy && (
+              <Dock note="No money will be transferred automatically.">
+                <Button
+                  disabled={lifeBlocked || lifeBusy}
+                  onClick={() => setModal("review")}
+                >
+                  Review selected future
+                  <Icon name="arrow" />
+                </Button>
+              </Dock>
+            )}
           </>
         )}
         {page === "active" && (
@@ -972,12 +974,12 @@ export function App() {
             <h1 ref={heading} tabIndex={-1} className="page-title">
               {plan?.status === "paused"
                 ? "Take it at your pace."
-                : "Your next move is set."}
+                : "Your plan, at a glance."}
             </h1>
             <p className="body-copy">
               {plan?.status === "paused"
                 ? "Your goal stays here. Resume when it works for you."
-                : "A little more room for what matters. Change it anytime."}
+                : "Your targets are saved. Stay flexible as life changes."}
             </p>
             <GoalProgress
               goal={
@@ -992,52 +994,6 @@ export function App() {
             />
             {plan && (
               <>
-                <div className="saved-plan-lines">
-                  <div>
-                    <span>Planned goal date</span>
-                    <b>{dateLabel(plan.scenario.projection.targetDate)}</b>
-                  </div>
-                  {plan.scenario.life?.event && (
-                    <p className="sheet-note">
-                      {plan.scenario.tradeoffs.at(-1)}
-                    </p>
-                  )}
-                  <div>
-                    <span>Extra toward your goal</span>
-                    <b>{money(plan.scenario.projection.extra)} / month</b>
-                  </div>
-                  {adjustable
-                    .filter((c) => plan.scenario.adjustments[c] > 0)
-                    .map((c) => (
-                      <div key={c}>
-                        <span>{c} target</span>
-                        <b>
-                          {money(
-                            currentTotals[c] - plan.scenario.adjustments[c],
-                          )}{" "}
-                          / month
-                        </b>
-                      </div>
-                    ))}
-                  <div>
-                    <span>Check-in preference</span>
-                    <b>{plan.reminder ? plan.day : "Off"}</b>
-                  </div>
-                </div>
-                <Forecast scenario={plan.scenario} goal={goal} />
-                <div className="feedback-example">
-                  <span className="overline">
-                    FUTURE FEEDBACK · ILLUSTRATIVE ONLY
-                  </span>
-                  <p>
-                    “You’re $18 under your weekly dining target. Your Vacation
-                    Fund remains on track.”
-                  </p>
-                  <small>
-                    This message is an example, not a result from your current
-                    transactions.
-                  </small>
-                </div>
                 <div className="active-actions">
                   <Button
                     secondary
@@ -1076,13 +1032,59 @@ export function App() {
                     Turn off
                   </button>
                 </div>
+                <div className="saved-plan-lines">
+                  <div>
+                    <span>Planned goal date</span>
+                    <b>{dateLabel(plan.scenario.projection.targetDate)}</b>
+                  </div>
+                  {plan.scenario.life?.event && (
+                    <p className="sheet-note">
+                      {plan.scenario.tradeoffs.at(-1)}
+                    </p>
+                  )}
+                  <div>
+                    <span>Monthly savings</span>
+                    <b>{money(plan.scenario.projection.monthly)} / month</b>
+                  </div>
+                  {adjustable
+                    .filter((c) => plan.scenario.adjustments[c] > 0)
+                    .map((c) => (
+                      <div key={c}>
+                        <span>{c} target</span>
+                        <b>
+                          {money(
+                            currentTotals[c] - plan.scenario.adjustments[c],
+                          )}{" "}
+                          / month
+                        </b>
+                      </div>
+                    ))}
+                  <div>
+                    <span>Check-in preference</span>
+                    <b>{plan.reminder ? plan.day : "Off"}</b>
+                  </div>
+                </div>
+                <Forecast scenario={plan.scenario} goal={goal} />
+                <div className="feedback-example">
+                  <span className="overline">
+                    FUTURE FEEDBACK · ILLUSTRATIVE ONLY
+                  </span>
+                  <p>
+                    “You’re $18 under your weekly dining target. Your Vacation
+                    Fund remains on track.”
+                  </p>
+                  <small>
+                    This message is an example, not a result from your current
+                    transactions.
+                  </small>
+                </div>
               </>
             )}
             <p className="sample-note">
               No real reminders are scheduled. No money has moved.
             </p>
             <Dock>
-              <Button onClick={() => go("home")}>
+              <Button secondary onClick={() => go("home")}>
                 Back to home
                 <Icon name="arrow" />
               </Button>
@@ -1096,7 +1098,7 @@ export function App() {
             </h1>
             <p className="body-copy">Make room for what matters.</p>
             <div className="goal-detail">
-              <GoalProgress goal={goal} />
+              <GoalProgress goal={displayGoal} />
               <button className="text-button" onClick={() => setModal("goal")}>
                 Edit goal
                 <Icon name="edit" />
@@ -1172,7 +1174,7 @@ export function App() {
               why: "How this was put together.",
               adjust: "Make it work for you.",
               ask: "What matters to you?",
-              review: "Your plan. Your final say.",
+              review: "Review your future",
               goal: "Make it yours.",
               about: "A little help, on your terms.",
               pause: "Pause this plan?",
@@ -1445,10 +1447,13 @@ export function App() {
           )}
           {modal === "review" && (
             <>
+              <div className="review-future-label">Your chosen future</div>
+              <h3 className="review-future-title">{scenario.title}</h3>
               <div className="review-amount">
-                +{money(p.extra)}
+                {money(p.monthly)}
                 <span>
-                  additional monthly savings · {money(p.monthly)} total
+                  total monthly savings · {money(p.extra)} above your scheduled
+                  contribution
                 </span>
               </div>
               <div className="review-changes">
@@ -1458,10 +1463,6 @@ export function App() {
                     {dateLabel(addMonths(goal.months))} →{" "}
                     {dateLabel(p.targetDate)}
                   </b>
-                </div>
-                <div>
-                  <span>Total savings target</span>
-                  <b>{money(p.monthly)} / month</b>
                 </div>
                 {scenario.life?.event && (
                   <p className="sheet-note">{scenario.tradeoffs.at(-1)}</p>
@@ -1481,39 +1482,45 @@ export function App() {
                     </div>
                   ))}
               </div>
-              <label className="reminder-toggle">
-                <span>
-                  <strong>Weekly check-in</strong>
-                  <small>Saved preference, no real notification</small>
-                </span>
-                <input
-                  type="checkbox"
-                  role="switch"
-                  checked={reminder}
-                  onChange={(e) => setReminder(e.target.checked)}
-                />
-              </label>
-              <div className="reminder-day">
-                <label htmlFor="day">My day</label>
-                <select
-                  id="day"
-                  disabled={!reminder}
-                  value={day}
-                  onChange={(e) => setDay(e.target.value)}
-                >
-                  {[
-                    "Sunday",
-                    "Monday",
-                    "Tuesday",
-                    "Wednesday",
-                    "Thursday",
-                    "Friday",
-                    "Saturday",
-                  ].map((d) => (
-                    <option key={d}>{d}</option>
-                  ))}
-                </select>
-              </div>
+              <details className="review-checkin">
+                <summary>
+                  Check-in preference{" "}
+                  <span>{reminder ? day : "Off"} · Edit</span>
+                </summary>
+                <label className="reminder-toggle">
+                  <span>
+                    <strong>Weekly check-in</strong>
+                    <small>Saved preference, no real notification</small>
+                  </span>
+                  <input
+                    type="checkbox"
+                    role="switch"
+                    checked={reminder}
+                    onChange={(e) => setReminder(e.target.checked)}
+                  />
+                </label>
+                <div className="reminder-day">
+                  <label htmlFor="day">My day</label>
+                  <select
+                    id="day"
+                    disabled={!reminder}
+                    value={day}
+                    onChange={(e) => setDay(e.target.value)}
+                  >
+                    {[
+                      "Sunday",
+                      "Monday",
+                      "Tuesday",
+                      "Wednesday",
+                      "Thursday",
+                      "Friday",
+                      "Saturday",
+                    ].map((d) => (
+                      <option key={d}>{d}</option>
+                    ))}
+                  </select>
+                </div>
+              </details>
               <div className="approval-boundary">
                 <h3>With your approval</h3>
                 <p>
@@ -1535,16 +1542,21 @@ export function App() {
                 Why this recommendation?
                 <Icon name="info" />
               </button>
-              <Button onClick={activate}>
-                Activate plan
-                <Icon name="check" />
-              </Button>
-              <Button
-                secondary
-                onClick={() => setModal(scenario.life ? null : "adjust")}
-              >
-                Edit plan
-              </Button>
+              <p className="sheet-note review-estimate">
+                Projections are estimates. Edit or pause your plan anytime.
+              </p>
+              <div className="review-actions">
+                <Button onClick={activate}>
+                  Activate plan
+                  <Icon name="check" />
+                </Button>
+                <Button
+                  secondary
+                  onClick={() => setModal(scenario.life ? null : "adjust")}
+                >
+                  Edit plan
+                </Button>
+              </div>
             </>
           )}
           {modal === "goal" && (

@@ -142,6 +142,14 @@ export async function runLifeAgent(
   let analyzedState: string | null = null;
   const enforce = (rawState: unknown) => {
     const state = lifeStateSchema.parse(rawState);
+    if (
+      state.shoppingReduction !== input.state.shoppingReduction &&
+      state.shoppingReduction !== null &&
+      !/shopping|retail|clothes|purchases/i.test(input.request)
+    )
+      throw new Error(
+        "Only set an exact shoppingReduction when the user explicitly requests a shopping adjustment. Otherwise preserve the prior value.",
+      );
     state.protectedCategories = [
       ...new Set([
         ...input.state.protectedCategories,
