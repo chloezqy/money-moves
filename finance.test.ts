@@ -5,6 +5,7 @@ import {
   project,
   calculateSuggestion,
   makeScenario,
+  parseExamplePreferences,
 } from "./finance";
 import { initialGoal, ledger } from "./fixtures";
 import { defaultPreferences, emptyAdjustments } from "./model";
@@ -19,6 +20,8 @@ test("synthetic ledger supports the visible insight across five months", () => {
   assert.equal(a.currentCount, 15);
   assert.equal(a.typicalCount, 10);
   assert.equal(a.extraCount, 5);
+  assert.equal(a.method, "Equivalent date ranges");
+  assert.equal(a.baselinePeriod, "Jul–Sep, days 1–23");
   assert.equal(
     a.contributing.reduce((sum, t) => sum + t.amount, 0),
     120,
@@ -92,4 +95,21 @@ test("all categories protected returns an honest shortfall", () => {
   });
   assert.equal(s.projection.extra, 0);
   assert.equal(s.projection.gap, 300);
+});
+test("explicit protections win over contradictory requested reductions", () => {
+  const preferences = parseExamplePreferences(
+    "Keep dining unchanged, but cut dining by $60 and find another way.",
+    defaultPreferences(),
+  );
+  assert.ok(preferences.protectedCategories.includes("Dining"));
+  const scenario = calculateSuggestion(initialGoal, preferences, "dining");
+  assert.equal(scenario.adjustments.Dining, 0);
+  assert.throws(() =>
+    makeScenario(
+      initialGoal,
+      { ...scenario.adjustments, Dining: 5 },
+      preferences,
+      "Edited plan",
+    ),
+  );
 });

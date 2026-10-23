@@ -43,6 +43,11 @@ import {
 } from "./model";
 
 type Page = "home" | "insight" | "planner" | "active" | "goals" | "activity";
+const pages: Page[] = ["home", "insight", "planner", "active", "goals", "activity"];
+function pageFromHash(hash: string): Page {
+  const candidate = hash.replace(/^#/, "") as Page;
+  return pages.includes(candidate) ? candidate : "home";
+}
 type Modal =
   | "evidence"
   | "correction"
@@ -51,7 +56,6 @@ type Modal =
   | "ask"
   | "review"
   | "goal"
-  | "settings"
   | "about"
   | "pause"
   | "off"
@@ -85,7 +89,7 @@ const pendingWords = [
 ];
 export function App() {
   const [page, setPage] = useState<Page>(
-    location.hash === "#planner" ? "planner" : "home",
+    pageFromHash(location.hash),
   );
   const [goal, setGoal] = useState<Goal>(stored?.goal || initialGoal);
   const [plan, setPlan] = useState<ActivePlan | null>(stored?.plan || null);
@@ -110,7 +114,6 @@ export function App() {
   const [reminder, setReminder] = useState(stored?.plan?.reminder ?? true);
   const [day, setDay] = useState(stored?.plan?.day || "Sunday");
   const [search, setSearch] = useState("");
-  const [hidden, setHidden] = useState(false);
   const [mode, setMode] = useState<"live" | "example">("example");
   const [response, setResponse] = useState<PlanningResponse | null>(null);
   const [request, setRequest] = useState("");
@@ -323,9 +326,9 @@ export function App() {
               onClick={() => go("insight")}
             />
             <button
-              className="avatar"
-              onClick={() => setModal("settings")}
-              aria-label="Your account preferences"
+              className="avatar placeholder-control"
+              disabled
+              aria-label="Account profile unavailable in this prototype"
             >
               AC
             </button>
@@ -339,24 +342,13 @@ export function App() {
               <div className="greeting">Good morning, Alex</div>
               <div className="balance-caption">
                 Available balance
-                <IconButton
-                  name="eye"
-                  label={hidden ? "Show balance" : "Hide balance"}
-                  onClick={() => setHidden(!hidden)}
-                />
               </div>
               <h1 ref={heading} tabIndex={-1} className="balance">
-                {hidden ? (
-                  "••,•••.••"
-                ) : (
-                  <>
-                    $8,452<span>.80</span>
-                  </>
-                )}
+                $8,452<span>.80</span>
               </h1>
-              <span className="account-caption">
-                Everyday checking · •• 4829
-              </span>
+              <div className="account-caption">
+                <span>Everyday checking · •• 4829</span>
+              </div>
             </section>
             <section className="home-goal">
               <div className="section-title">
@@ -398,21 +390,24 @@ export function App() {
                   </button>
                 </div>
                 <h2>
-                  Dining is higher
-                  <br />
-                  than usual.
+                  A small pattern changed.
                 </h2>
                 <div className="insight-metrics">
-                  <strong>
-                    $320 <span>this month</span>
-                  </strong>
-                  <small>
-                    Usually around $200 <b>+$120</b>
-                  </small>
+                  <div>
+                    <small>DINING · OCT 1–23</small>
+                    <strong>$320</strong>
+                    <i style={{ "--metric": "100%" } as React.CSSProperties} />
+                  </div>
+                  <div>
+                    <small>TYPICAL · SAME 23 DAYS</small>
+                    <strong>$200</strong>
+                    <i style={{ "--metric": "62.5%" } as React.CSSProperties} />
+                  </div>
                 </div>
+                <div className="insight-delta"><b>+$120</b> above your recent pace</div>
                 <p>
-                  More small purchases, rather than one big expense. See what
-                  this means for your goal.
+                  Five more small purchases explain the difference. See the
+                  evidence, then decide whether it matters for your goal.
                 </p>
                 <Button onClick={() => go("insight")}>
                   See what changed
@@ -464,7 +459,7 @@ export function App() {
                 <strong>$320</strong>
               </div>
               <span className="delta">
-                +$120<small>vs. $200 usual</small>
+                +$120<small>vs. the same 23 days</small>
               </span>
             </section>
             <section
@@ -489,7 +484,7 @@ export function App() {
               <h2>5 more dining purchases.</h2>
               <p>
                 Five additional purchases, between $18 and $28, account for the
-                $120 increase.
+                $120 increase versus the same date range in recent months.
               </p>
               <button
                 className="text-button"
@@ -558,6 +553,7 @@ export function App() {
               <br />
               for your life.
             </h1>
+            <span className="planner-step">01 · YOUR GOAL</span>
             <div className="goal-context">
               <Icon name="plane" />
               <span>{goal.name}</span>
@@ -571,6 +567,7 @@ export function App() {
                 ? "Keep dining as it is."
                 : "Start with one small change."}
             </p>
+            <span className="planner-step">02 · YOUR CHOICES</span>
             <div className="plan-options">
               <button
                 className={
@@ -680,6 +677,44 @@ export function App() {
               <Icon name="shield" />
               {preferences.protectedCategories.join(", ")} protected
             </div>
+            {response && (
+              <div
+                className={`agent-result ${response.source === "fallback" ? "fallback" : ""}`}
+                role="status"
+              >
+                <div className="agent-result-heading">
+                  <Icon name={response.source === "live" ? "check" : "info"} />
+                  <strong>
+                    {response.source === "live"
+                      ? "Money Moves understood your priority"
+                      : response.source === "fallback"
+                        ? "Live planning unavailable · calculated example"
+                        : "Calculated example · no live AI"}
+                  </strong>
+                </div>
+                <p>{response.summary}</p>
+                {response.constraints.length > 0 && (
+                  <div className="understood-priorities">
+                    <span>Understood</span>
+                    {response.constraints.map((constraint) => (
+                      <b key={constraint}><Icon name="lock" />{constraint}</b>
+                    ))}
+                  </div>
+                )}
+                <details>
+                  <summary>How this plan was built</summary>
+                  <ul>
+                    {response.toolActivity.map((s) => (
+                      <li key={s}>{s}</li>
+                    ))}
+                  </ul>
+                  <p>{scenario.rationale}</p>
+                  {scenario.tradeoffs.map((s) => <p key={s}>{s}</p>)}
+                  {response.limitations.map((s) => <p key={s}>{s}</p>)}
+                </details>
+              </div>
+            )}
+            <span className="planner-step future-step">03 · YOUR FUTURE</span>
             <Forecast scenario={scenario} goal={goal} />
             <button
               className="calculation-link"
@@ -783,36 +818,6 @@ export function App() {
                 Undo last change
               </button>
             </section>
-            {response && (
-              <div
-                className={`agent-result ${response.source === "fallback" ? "fallback" : ""}`}
-                role="status"
-              >
-                <strong>
-                  {response.source === "live"
-                    ? "Plan updated with AI"
-                    : response.source === "fallback"
-                      ? "Live planning unavailable · calculated example"
-                      : "Calculated example · no live AI"}
-                </strong>
-                <p>{response.summary}</p>
-                <details>
-                  <summary>Data and tools used</summary>
-                  <ul>
-                    {response.toolActivity.map((s) => (
-                      <li key={s}>{s}</li>
-                    ))}
-                  </ul>
-                  <p>{scenario.rationale}</p>
-                  {scenario.tradeoffs.map((s) => (
-                    <p key={s}>{s}</p>
-                  ))}
-                  {response.limitations.map((s) => (
-                    <p key={s}>{s}</p>
-                  ))}
-                </details>
-              </div>
-            )}
             <Dock note="Targets stay yours. Nothing transfers automatically.">
               <Button onClick={() => setModal("review")}>
                 Review my plan
@@ -994,7 +999,11 @@ export function App() {
               <span>{label}</span>
             </button>
           ))}
-          <button onClick={() => setModal("settings")}>
+          <button
+            className="placeholder-control"
+            disabled
+            aria-label="Settings unavailable in this prototype"
+          >
             <Icon name="settings" />
             <span>Settings</span>
           </button>
@@ -1011,7 +1020,6 @@ export function App() {
               ask: "What matters to you?",
               review: "Your plan. Your final say.",
               goal: "Make it yours.",
-              settings: "Your preferences.",
               about: "A little help, on your terms.",
               pause: "Pause this plan?",
               off: "Turn this plan off?",
@@ -1037,8 +1045,9 @@ export function App() {
           {modal === "evidence" && (
             <>
               <p>
-                These five additional purchases total $120. The usual baseline
-                is ten dining purchases totaling $200 per month.
+                These five additional purchases total $120. The comparison is
+                ten dining purchases totaling $200 over days 1–23 in each of
+                the previous three months.
               </p>
               {analysis.contributing.map((t) => (
                 <TransactionRow key={t.id} transaction={t} />
@@ -1052,8 +1061,8 @@ export function App() {
                   ))}
               </details>
               <p className="sheet-note">
-                Observed: 15 purchases this month, compared with 10 per month in
-                July–September. All data is synthetic.
+                Observed: 15 purchases through Oct 23, compared with 10 through
+                the 23rd in July–September. All data is synthetic.
               </p>
             </>
           )}
@@ -1088,7 +1097,7 @@ export function App() {
               <span className="overline">SIGNALS USED</span>
               <ul className="signal-list">
                 <li>Recent dining purchases</li>
-                <li>July–September spending baseline</li>
+                <li>Equivalent July–September date ranges (days 1–23)</li>
                 <li>Your Vacation Fund target</li>
                 <li>Preferences and context you explicitly provided</li>
               </ul>
@@ -1364,24 +1373,6 @@ export function App() {
                 setToast("Goal updated. Review a new plan for this goal.");
               }}
             />
-          )}
-          {modal === "settings" && (
-            <>
-              <label className="reminder-toggle">
-                <span>Hide balance</span>
-                <input
-                  type="checkbox"
-                  role="switch"
-                  checked={hidden}
-                  onChange={(e) => setHidden(e.target.checked)}
-                />
-              </label>
-              <button className="text-button" onClick={() => setModal("about")}>
-                About this prototype
-                <Icon name="info" />
-              </button>
-              <Button onClick={() => setModal(null)}>Done</Button>
-            </>
           )}
           {modal === "about" && (
             <>

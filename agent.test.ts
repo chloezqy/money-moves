@@ -94,6 +94,19 @@ test("malformed output, API error, and unsimulated output fall back safely", asy
   assert.equal(unsimulated.source, "fallback");
   assert.equal(unsimulated.scenarios[0].adjustments.Dining, 0);
 });
+test("a model answer without required financial tool calls cannot become a plan", async () => {
+  const response = await runGoalAgent(request, async () => ({
+    output: [
+      {
+        type: "message",
+        content: [{ type: "output_text", text: JSON.stringify(result) }],
+      },
+    ],
+  }));
+  assert.equal(response.source, "fallback");
+  assert.equal(response.scenarios[0].source, "calculated");
+  assert.equal(response.scenarios[0].adjustments.Dining, 0);
+});
 test("protected-category violations cannot become live recommendations", async () => {
   const changed = structuredClone(result);
   changed.scenarios[0].adjustments = { ...emptyAdjustments(), Dining: 60 };

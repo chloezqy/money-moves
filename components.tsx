@@ -153,11 +153,13 @@ export function Forecast({
       { length: goal.months + 1 },
       (_, i) => `${8 + (i / goal.months) * 320},${y(goal.saved + monthly * i)}`,
     ).join(" ");
+  const baselinePoints = points(goal.base);
+  const planPoints = points(p.monthly);
   return (
     <section className="forecast">
       <div className="forecast-heading">
         <div>
-          <span>Projected by {dateLabel(p.targetDate)}</span>
+          <span>Potential savings by {dateLabel(p.targetDate)}</span>
           <strong>{money(p.projected)}</strong>
         </div>
         <span className={`status ${p.gap ? "warning" : ""}`}>
@@ -170,6 +172,12 @@ export function Forecast({
         role="img"
         aria-label={`With this plan ${money(p.projected)}, compared with ${money(p.baseline)} on your current savings path. Goal ${money(goal.target)}.`}
       >
+        <defs>
+          <linearGradient id="plan-area" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="#4259c9" stopOpacity="0.16" />
+            <stop offset="1" stopColor="#4259c9" stopOpacity="0" />
+          </linearGradient>
+        </defs>
         <line
           x1="8"
           x2="328"
@@ -182,18 +190,22 @@ export function Forecast({
           {money(goal.target)} goal
         </text>
         <polyline
-          points={points(goal.base)}
+          points={baselinePoints}
           fill="none"
           stroke="#aab5c9"
           strokeWidth="2"
           strokeDasharray="4 5"
         />
         <polyline
-          points={points(p.monthly)}
+          points={planPoints}
           fill="none"
           stroke="#405ee0"
           strokeWidth="2.5"
           strokeLinecap="round"
+        />
+        <polygon
+          points={`8,125 ${planPoints} 328,125`}
+          fill="url(#plan-area)"
         />
         <circle cx="328" cy={y(p.projected)} r="4" fill="#405ee0" />
         <text x="8" y="149">
@@ -214,7 +226,7 @@ export function Forecast({
         </span>
       </div>
       <p className="forecast-date">
-        Estimated goal date:{" "}
+        If you set aside the difference, estimated goal date:{" "}
         <b>{p.goalDate ? dateLabel(p.goalDate) : "No regular contribution"}</b>
       </p>
     </section>

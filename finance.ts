@@ -66,9 +66,13 @@ export function project(goal: Goal, adjustments: Adjustments): Projection {
   };
 }
 export function spendingAnalysis() {
+  const comparisonDay = Number(asOf.slice(-2));
   const prior = [7, 8, 9].map((m) =>
     ledger.filter(
-      (t) => t.category === "Dining" && t.date.startsWith(`2026-0${m}`),
+      (t) =>
+        t.category === "Dining" &&
+        t.date.startsWith(`2026-0${m}`) &&
+        Number(t.date.slice(-2)) <= comparisonDay,
     ),
   );
   const typical =
@@ -88,7 +92,8 @@ export function spendingAnalysis() {
     extraCount: current.length - typicalCount,
     contributing: current.filter((t) => t.contributing),
     period: "Oct 1–23",
-    baselinePeriod: "July–September",
+    baselinePeriod: "Jul–Sep, days 1–23",
+    method: "Equivalent date ranges",
   };
 }
 export function validateScenario(
@@ -134,8 +139,8 @@ export function makeScenario(
       "Requires saving the difference consistently; spending targets do not move money.",
     ],
     evidence: [
-      "October transactions",
-      "July–September baseline",
+      "October 1–23 transactions",
+      "July–September, days 1–23 baseline",
       "Vacation Fund",
       "Your stated preferences",
     ],

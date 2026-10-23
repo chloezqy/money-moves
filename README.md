@@ -8,7 +8,7 @@ Transaction lists and spending charts describe what happened. They often leave p
 
 ## 2. Product concept
 
-Alex has $400 saved toward a $1,000 Vacation Fund, targeting five months from the sample date. Dining is $320 versus a recent $200 monthly baseline. Five additional small purchases account for the $120 increase. Money Moves helps Alex understand this change and explore a workable savings plan.
+Alex has $400 saved toward a $1,000 Vacation Fund, targeting five months from the sample date. Dining is $320 through October 23 versus $200 over the same 23-day window in each of the prior three months. Five additional small purchases account for the $120 increase. Money Moves helps Alex understand this change and explore a workable savings plan.
 
 ## 3. Why AI adds value
 
@@ -49,9 +49,9 @@ React state is deliberately local to the application; there is no database, auth
 
 **Deterministic:** observed amounts and transaction counts, historical averages, category limits, checking-buffer check, goal dates, projected savings, charts, presets, validation, persistence and activation.
 
-**AI-powered, when configured:** interpreting open-ended constraints, selecting tools, proposing up to two alternatives, and explaining tradeoffs. All proposed amounts are validated and recalculated before the UI uses them. The home insight's initial interpretation is authored demo content, not a live autonomous monitoring result.
+**AI-powered, when configured:** interpreting open-ended constraints, selecting tools, proposing up to two alternatives, and explaining tradeoffs. The model's interpretation is translated into protected-category chips, editable targets, alternatives and a recalculated forecast—not appended as a chat transcript. All proposed amounts are validated and recalculated before the UI uses them. The home insight's initial interpretation is authored demo content, not a live autonomous monitoring result.
 
-Projection: `saved + (scheduled monthly saving + monthly spending reductions) × months`. Alex's baseline is `400 + 60 × 5 = 700`. A $60 reduction produces `400 + (60 + 60) × 5 = 1,000`. The full reduction must actually be saved; no interest, withdrawals, automatic transfers, or future cash flow are modeled. October 1–23 is compared against complete prior months; this is a deliberately constructed scenario, not a normalized forecasting model.
+Projection: `saved + (scheduled monthly saving + monthly spending reductions) × months`. Alex's baseline is `400 + 60 × 5 = 700`. A $60 reduction produces `400 + (60 + 60) × 5 = 1,000`. The full reduction must actually be saved; no interest, withdrawals, automatic transfers, or future cash flow are modeled. October 1–23 is compared with days 1–23 of July, August and September. The fixture happens to contain the same ten routine purchases in each equivalent window; production logic would need account-specific normalization and seasonality handling.
 
 ## 8. Agent and tool flow
 
@@ -62,7 +62,7 @@ The server uses OpenAI's Responses API with strict function schemas and a strict
 - `get_goal_projection`: goal and deterministic baseline projection.
 - `simulate_scenario`: validate constraints and calculate the proposed scenario.
 
-The agent has an eight-step maximum. Every live recommendation must follow successful spending/category/goal tool calls and exactly match a successfully simulated adjustment. Zod validates the output; domain checks preserve protected categories and reduction caps. Final amounts are recalculated in TypeScript, never trusted from model prose. Groceries and bills remain protected. No tool can execute a financial action.
+The agent has an eight-step maximum. Every live recommendation must follow successful spending/category/goal tool calls and exactly match a successfully simulated adjustment. Zod validates the output; domain checks preserve protected categories and reduction caps. Explicit protections win over conflicting requested reductions. Final amounts are recalculated in TypeScript, never trusted from model prose. Groceries and bills remain protected. No tool can execute a financial action.
 
 Loading is shown as a brief activity status, not hidden model reasoning. Cancellation preserves the draft. Malformed output, missing tools, invalid amounts and API failures return a clearly marked calculated fallback. A network failure between browser and local server leaves the request intact and offers retry. A requested buffer above today's sample balance produces no new scenario. No API key means labeled **Example mode**, with a small phrase-based preference parser; it is not presented as live AI.
 
@@ -114,10 +114,10 @@ Set `OPENAI_API_KEY` privately in that file and optionally change `OPENAI_MODEL`
 
 ## 15. Known limitations
 
-- No live API call was verified in this development environment because no API key was configured. Tests exercise the real tool loop with controlled mock Responses API messages, not a live model.
+- No live API call was verified in this development environment because the running app reported Example mode and no usable model credential was available. Tests exercise the real tool loop with controlled mock Responses API messages, not a live model.
 - Browser-local storage is a demo persistence layer on the same browser/origin. It is not encrypted banking storage or cross-device sync. Clear site data for a fresh demo.
 - There is no continuous background analysis, bank integration, authorization system or scheduled notification service.
-- Current sample spending and category caps are fixed. Checking buffer is checked against today's balance only and cannot guarantee future liquidity.
+- Current sample spending and category caps are fixed. The comparison now uses equivalent days 1–23, but does not model seasonality or merchant reimbursements. Checking buffer is checked against today's balance only and cannot guarantee future liquidity.
 - Example mode understands a limited set of dining/subscription/shopping/amount phrases. It does not understand arbitrary natural language. Live model explanations may still be wrong even when their amounts pass validation.
 - Protected categories are hard constraints; a requested monthly amount is a planning preference. Multiple protected categories or caps can leave a shortfall, which remains visible.
 - Goal dates use whole monthly steps, not exact weeks. All projections assume reductions are saved consistently.
