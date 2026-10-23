@@ -26,3 +26,5 @@ html::-webkit-scrollbar{display:none}
 .home-insight h2{font-size:28px}
 .insight-comparison{margin-top:18px;margin-bottom:18px}
 @media(max-width:370px){.home-insight h2{font-size:26px}}
+/* Keep editable controls at a comfortable phone reading size. */
+.field,.request-field textarea,.search-field input,.reminder-day select,.category-select{font-size:16px}
