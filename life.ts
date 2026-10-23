@@ -67,9 +67,9 @@ export interface LifeResult {
   limitations: string[];
 }
 export const limitations = [
-  "Monthly estimates from synthetic data as of October 23, 2026; not a daily cash-flow forecast.",
-  "October spending covers days 1–23, not a full-month baseline. Reductions are illustrative and capped.",
-  "No interest, income changes, automatic transfers, or notifications are modeled.",
+  "Monthly estimates use account activity through October 23, 2026; they are not a daily cash-flow forecast.",
+  "October spending covers days 1–23. Suggested reductions stay within defined category limits.",
+  "Interest and future income changes are outside this projection.",
 ];
 export function financialContext(goal: Goal) {
   return {

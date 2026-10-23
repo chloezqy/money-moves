@@ -440,19 +440,6 @@ export function LifeHappens({
                   {chosen && (
                     <ScenarioDetails key={chosen.id} chosen={chosen} />
                   )}
-                  <button
-                    className="followup-action"
-                    type="button"
-                    onClick={() => {
-                      setComposerOpen(true);
-                      requestAnimationFrame(() => input.current?.focus());
-                    }}
-                  >
-                    Something else changed?
-                    <span>
-                      Update your situation <Icon name="arrow" />
-                    </span>
-                  </button>
                 </>
               ) : (
                 <p className="life-clarification" role="status">
@@ -481,8 +468,8 @@ export function LifeHappens({
                 `Funding assumption: ${fundingLabels[state.event.funding]}.`}
             </p>
             <p>
-              Data: synthetic transactions, goal balance and checking balance as
-              of Oct 23, 2026. Category caps: Dining $120, Shopping $80,
+              Data: transaction history, goal balance and checking balance as of
+              Oct 23, 2026. Category caps: Dining $120, Shopping $80,
               Entertainment $60, Subscriptions $30.
             </p>
             <ul>

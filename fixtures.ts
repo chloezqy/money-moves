@@ -18,7 +18,8 @@ export const categories: Category[] = [
   "Bills",
 ];
 const monthTotals: Record<Category, number[]> = {
-  Dining: [200, 200, 200, 200, 320],
+  // Prior periods vary naturally while Jul–Sep still average exactly $200.
+  Dining: [192, 188, 201, 211, 320],
   Groceries: [340, 355, 360, 345, 360],
   Transport: [135, 140, 145, 140, 140],
   Entertainment: [145, 165, 160, 170, 180],
@@ -46,14 +47,15 @@ for (let month = 6; month <= 10; month++) {
   for (const category of categories) {
     const total = monthTotals[category][month - 6];
     if (category === "Dining") {
-      // Ten routine purchases total $200. October adds five small purchases totalling $120.
+      // Ten routine purchases form each month's baseline. October adds five
+      // small purchases totalling $120 above its $200 routine baseline.
       for (let i = 0; i < 10; i++)
         ledger.push({
           id: `${month}-d-${i}`,
           date: `2026-${String(month).padStart(2, "0")}-${String(2 + i * 2).padStart(2, "0")}`,
           merchant: merchants.Dining[i % 5],
           category,
-          amount: 20,
+          amount: month === 10 ? 20 : total / 10,
         });
       if (month === 10)
         [18, 22, 24, 28, 28].forEach((amount, i) =>

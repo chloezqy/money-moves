@@ -334,12 +334,12 @@ main {
   margin-top: 10px;
 }
 .home-insight {
-  border-radius: 0;
-  background: transparent;
-  padding: 26px 0 24px;
-  margin: 0;
-  border-top: 1px solid #c9cfe6;
-  border-bottom: 1px solid var(--line);
+  border-radius: 16px;
+  background: #f3f4f8;
+  padding: 18px;
+  margin: 4px 0 22px;
+  border: 1px solid #e1e4ee;
+  box-shadow: 0 7px 22px rgba(32, 45, 82, 0.06);
 }
 .agent-label {
   display: flex;
@@ -437,6 +437,60 @@ main {
 }
 .insight-metrics > div + div i:after {
   background: #9ba3b5;
+}
+.insight-comparison {
+  display: grid;
+  gap: 12px;
+  margin: 22px 0 14px;
+}
+.comparison-row {
+  display: grid;
+  grid-template-columns: 118px 1fr;
+  align-items: end;
+  gap: 14px;
+}
+.comparison-row > span {
+  min-width: 0;
+}
+.comparison-row small {
+  display: block;
+  color: #737b89;
+  font-size: 8px;
+  letter-spacing: 0.45px;
+  line-height: 1.35;
+  white-space: nowrap;
+}
+.comparison-row strong {
+  display: block;
+  margin-top: 3px;
+  font-size: 24px;
+  font-weight: 560;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.7px;
+}
+.comparison-row > i {
+  display: block;
+  height: 12px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: #ecece8;
+  margin-bottom: 3px;
+}
+.comparison-row > i b {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+}
+.comparison-row.typical strong {
+  color: #68717d;
+}
+.comparison-row.typical > i {
+  height: 12px;
+  margin-bottom: 3px;
+}
+.comparison-row.typical > i b {
+  background: #9fa7b2;
 }
 .insight-delta {
   font-size: 11px;
@@ -732,12 +786,12 @@ main {
 }
 .usual-line span {
   position: absolute;
-  right: 0;
+  left: 0;
   top: -18px;
   font-size: 9px;
   color: #63708d;
   background: #fff;
-  padding-left: 4px;
+  padding-right: 4px;
 }
 .overline {
   display: block;
@@ -761,19 +815,34 @@ main {
 .insight-facts .text-button {
   margin-top: 4px;
 }
-.interpretation {
-  padding: 20px 0;
+.insight-context {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--line);
 }
-.interpretation p {
-  margin-top: 8px;
+.insight-context > div {
+  min-width: 0;
 }
-.interpretation blockquote {
-  margin: 12px 0;
-  padding: 10px 12px;
-  border-left: 2px solid var(--accent);
-  background: var(--soft);
-  font-size: 13px;
-  line-height: 1.6;
+.insight-context span {
+  display: block;
+  color: #596477;
+  font-size: 10px;
+  font-weight: 650;
+}
+.insight-context p {
+  margin: 5px 0 0;
+  color: #4f5968;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.insight-context .text-button {
+  flex: 0 0 auto;
+  min-height: 28px;
+  padding: 0;
+  font-size: 10px;
 }
 .goal-impact {
   display: flex;

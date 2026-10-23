@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { icon } from "./icons.js";
 import { simulateLifeEvent } from "./life";
 import { emptyAdjustments } from "./model";
-import { money, dateLabel } from "./finance";
+import { addMonths, money, dateLabel } from "./finance";
 import type { Goal, Scenario, Transaction } from "./model";
 export function Icon({ name }: { name: string }) {
   return (
@@ -138,6 +138,92 @@ export function GoalProgress({ goal }: { goal: Goal }) {
         <span>{goal.months} months to go</span>
       </div>
     </>
+  );
+}
+export function CurrentPlanTrajectory({ goal }: { goal: Goal }) {
+  const projected = goal.saved + goal.base * goal.months;
+  const max = goal.target * 1.12;
+  const x = (month: number) => 18 + (month / goal.months) * 308;
+  const y = (value: number) => 132 - (value / max) * 104;
+  const values = Array.from(
+    { length: goal.months + 1 },
+    (_, month) => goal.saved + goal.base * month,
+  );
+  const path = values
+    .map((value, month) => `${month ? "L" : "M"}${x(month)},${y(value)}`)
+    .join(" ");
+  return (
+    <section className="current-plan-chart">
+      <div className="current-plan-chart-heading">
+        <div>
+          <span>At your current pace</span>
+          <strong>{money(projected)}</strong>
+        </div>
+        <span>{money(goal.target - projected)} to goal</span>
+      </div>
+      <svg
+        viewBox="0 0 344 172"
+        role="img"
+        aria-label={`Vacation Fund grows from ${money(goal.saved)} today to ${money(projected)} by ${dateLabel(addMonths(goal.months))}, against a ${money(goal.target)} goal.`}
+      >
+        <defs>
+          <linearGradient id="current-plan-area" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="#4259c9" stopOpacity="0.18" />
+            <stop offset="1" stopColor="#4259c9" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <line
+          x1="18"
+          x2="326"
+          y1={y(goal.target)}
+          y2={y(goal.target)}
+          stroke="#aeb6c7"
+          strokeDasharray="4 5"
+        />
+        <text x="326" y={y(goal.target) - 8} textAnchor="end">
+          {money(goal.target)} goal
+        </text>
+        <path
+          d={`${path} L326,136 L18,136 Z`}
+          fill="url(#current-plan-area)"
+        />
+        <path
+          d={path}
+          fill="none"
+          stroke="#4259c9"
+          strokeWidth="3"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <circle cx={x(0)} cy={y(goal.saved)} r="5" fill="#172033" />
+        <circle
+          cx={x(goal.months)}
+          cy={y(projected)}
+          r="6"
+          fill="#4259c9"
+          stroke="#fbfaf7"
+          strokeWidth="2"
+        />
+        <text x={x(0)} y={y(goal.saved) - 10}>
+          {money(goal.saved)}
+        </text>
+        <text
+          x={x(goal.months)}
+          y={y(projected) - 12}
+          textAnchor="end"
+        >
+          {money(projected)} projected
+        </text>
+        <text x="18" y="164">Today</text>
+        <text x="326" y="164" textAnchor="end">
+          {dateLabel(addMonths(goal.months))}
+        </text>
+      </svg>
+      <p>
+        Your scheduled {money(goal.base)} monthly contribution continues toward
+        the target date.
+      </p>
+    </section>
   );
 }
 export function Forecast({

@@ -40,6 +40,13 @@ export function FuturePaths({
   const colors = paths.map((p) =>
     p.id === selected?.id ? "#4259c9" : "#9b7c63",
   );
+  const eventImpact = state.event
+    ? state.event.funding === "checking"
+      ? "Paid from checking · goal savings stay intact"
+      : state.event.funding === "savings"
+        ? "Reduces that month’s goal contribution"
+        : "Withdrawn from the Vacation Fund"
+    : null;
   return (
     <figure className="future-chart">
       <div className="chart-context">
@@ -48,6 +55,17 @@ export function FuturePaths({
           {money(goal.saved)} → {money(target)}
         </b>
       </div>
+      {state.event && (
+        <div className={`event-impact event-${state.event.funding}`}>
+          <span aria-hidden="true">◇</span>
+          <div>
+            <strong>
+              {state.event.name} · {money(state.event.amount)}
+            </strong>
+            <small>{eventImpact}</small>
+          </div>
+        </div>
+      )}
       <svg
         viewBox="0 0 390 290"
         role="group"
@@ -97,12 +115,21 @@ export function FuturePaths({
         {state.event && state.event.month <= horizon && (
           <g>
             <rect
-              x={x(state.event.month) - 10}
+              x={x(state.event.month) - 12}
               y="32"
-              width="20"
+              width="24"
               height="193"
               fill="#bd9c6a"
-              opacity=".08"
+              opacity=".12"
+            />
+            <line
+              x1={x(state.event.month)}
+              x2={x(state.event.month)}
+              y1="32"
+              y2="225"
+              stroke="#a47d43"
+              strokeWidth="1.5"
+              strokeDasharray="3 4"
             />
             <text x={x(state.event.month)} y="242" textAnchor="middle">
               ◇

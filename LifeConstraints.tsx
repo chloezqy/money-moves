@@ -25,17 +25,15 @@ export function LifeConstraints({
         <div className="life-protections">
           {[
             "Dining",
-            "Groceries",
             "Shopping",
             "Subscriptions",
             "Entertainment",
-            "Bills",
           ].map((c) => (
             <button
               key={c}
               type="button"
               aria-pressed={state.protectedCategories.includes(c as Category)}
-              disabled={busy || c === "Groceries" || c === "Bills"}
+              disabled={busy}
               className={
                 state.protectedCategories.includes(c as Category)
                   ? "protected"
@@ -59,6 +57,10 @@ export function LifeConstraints({
             </button>
           ))}
         </div>
+        <p className="essential-protections">
+          <span aria-hidden="true">✓</span>
+          Groceries and bills are always protected as essentials.
+        </p>
       </div>
       {state.event && (
         <div className="event-editor">

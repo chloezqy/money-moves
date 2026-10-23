@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
   AgentLabel,
   Button,
+  CurrentPlanTrajectory,
   Dock,
   Forecast,
   GoalProgress,
@@ -66,6 +67,7 @@ type Modal =
   | "review"
   | "goal"
   | "about"
+  | "profile"
   | "pause"
   | "off"
   | null;
@@ -206,6 +208,7 @@ export function App() {
   const history = useRef<
     Array<{ scenario: Scenario; preferences: Preferences }>
   >([]);
+  const plannerReturn = useRef<Page>(plan ? "active" : "insight");
   const abort = useRef<AbortController | null>(null);
   const [canUndo, setCanUndo] = useState(false);
   const heading = useRef<HTMLHeadingElement>(null);
@@ -269,7 +272,8 @@ export function App() {
     setResponse(null);
     setAlternatives([]);
   }
-  function start() {
+  function start(returnTo: Page = "insight") {
+    plannerReturn.current = returnTo;
     setScenario(calculateSuggestion(goal, preferences));
     setResponse(null);
     setAlternatives([]);
@@ -288,7 +292,7 @@ export function App() {
   }
   function protect(category: Category) {
     if (category === "Groceries" || category === "Bills") {
-      setToast("Essentials stay protected in this prototype.");
+      setToast("Groceries and bills stay protected as essentials.");
       return;
     }
     remember();
@@ -375,9 +379,9 @@ export function App() {
       activatedAt: new Date().toISOString(),
     });
     go("active");
-    setToast("Your plan is active in this demo.");
+    setToast("Your plan is active.");
   }
-  const flow = ["insight", "planner", "active"].includes(page);
+  const flow = ["insight", "planner"].includes(page);
   const p = scenario.projection;
   const displayGoal = plan?.scenario.life
     ? {
@@ -389,7 +393,6 @@ export function App() {
   const nav = [
     ["home", "home", "Home"],
     ["activity", "chart", "Activity"],
-    ["goals", "flag", "Goals"],
   ] as const;
   return (
     <div
@@ -400,14 +403,14 @@ export function App() {
           <IconButton
             name="left"
             label="Go back"
-            onClick={() => go(page === "planner" ? "insight" : "home")}
+            onClick={() =>
+              go(page === "planner" ? plannerReturn.current : "home")
+            }
           />
           <span>
             {page === "insight"
               ? "Spending insight"
-              : page === "active"
-                ? "Your active plan"
-                : "Your next move"}
+              : "Your next move"}
           </span>
           <IconButton
             name="info"
@@ -432,9 +435,9 @@ export function App() {
               onClick={() => go("insight")}
             />
             <button
-              className="avatar placeholder-control"
-              disabled
-              aria-label="Account profile unavailable in this prototype"
+              className="avatar"
+              aria-label="Open Alex’s profile"
+              onClick={() => setModal("profile")}
             >
               AC
             </button>
@@ -457,8 +460,11 @@ export function App() {
             <section className="home-goal">
               <div className="section-title">
                 <h2>Vacation Fund</h2>
-                <button className="text-button" onClick={() => go("goals")}>
-                  View goal
+                <button
+                  className="text-button"
+                  onClick={() => go("active")}
+                >
+                  View plan
                   <Icon name="chevron" />
                 </button>
               </div>
@@ -494,16 +500,24 @@ export function App() {
                   </button>
                 </div>
                 <h2>Dining is up $120.</h2>
-                <div className="insight-metrics">
-                  <div>
-                    <small>DINING · OCT 1–23</small>
-                    <strong>$320</strong>
-                    <i style={{ "--metric": "100%" } as React.CSSProperties} />
+                <div
+                  className="insight-comparison"
+                  role="img"
+                  aria-label="Dining is 320 dollars this period, compared with a typical 200 dollars"
+                >
+                  <div className="comparison-row current">
+                    <span>
+                      <small>THIS PERIOD · OCT 1–23</small>
+                      <strong>$320</strong>
+                    </span>
+                    <i><b style={{ width: "100%" }} /></i>
                   </div>
-                  <div>
-                    <small>TYPICAL · SAME 23 DAYS</small>
-                    <strong>$200</strong>
-                    <i style={{ "--metric": "62.5%" } as React.CSSProperties} />
+                  <div className="comparison-row typical">
+                    <span>
+                      <small>TYPICAL · SAME 23 DAYS</small>
+                      <strong>$200</strong>
+                    </span>
+                    <i><b style={{ width: "62.5%" }} /></i>
                   </div>
                 </div>
                 <div className="insight-delta">
@@ -541,12 +555,6 @@ export function App() {
                 <TransactionRow key={t.id} transaction={t} />
               ))}
             </section>
-            <p className="sample-note">
-              Synthetic account ·{" "}
-              {mode === "live"
-                ? "Live planning available"
-                : "Example planning mode"}
-            </p>
           </>
         )}
         {page === "insight" && (
@@ -566,7 +574,7 @@ export function App() {
             </section>
             <section
               className="dining-chart"
-              aria-label="Dining: June 200 dollars, July 200, August 200, September 200, October 320"
+              aria-label={`Dining: ${monthlyDining.map((month) => `${month.month} ${money(month.total)}`).join(", ")}`}
             >
               <div className="usual-line">
                 <span>Usual $200</span>
@@ -596,14 +604,15 @@ export function App() {
                 <Icon name="chevron" />
               </button>
             </div>
-            <div className="interpretation">
-              <span className="overline">MONEY MOVES’ INTERPRETATION</span>
-              <p>
-                {context
-                  ? "You added context to this insight. The observed totals stay the same."
-                  : "This looks like a change in frequency, not a single unusually large expense."}
-              </p>
-              {context && <blockquote>{context}</blockquote>}
+            <div className="insight-context">
+              <div>
+                <span>What we noticed</span>
+                <p>
+                  {context
+                    ? context
+                    : "The increase comes from more frequent dining, rather than one unusually large purchase."}
+                </p>
+              </div>
               <button
                 className="text-button"
                 onClick={() => {
@@ -611,7 +620,7 @@ export function App() {
                   setModal("correction");
                 }}
               >
-                Not quite?
+                {context ? "Edit context" : "Add context"}
                 <Icon name="edit" />
               </button>
             </div>
@@ -631,7 +640,7 @@ export function App() {
               Why this insight?
               <Icon name="info" />
             </button>
-            <Dock note="Explore freely. No account changes.">
+            <Dock note="Explore freely. You stay in control.">
               <Button onClick={start}>
                 Explore my options
                 <Icon name="arrow" />
@@ -915,7 +924,7 @@ export function App() {
                         remember();
                         setPreferences({ ...preferences, checkingBuffer: 500 });
                         setToast(
-                          "$500 buffer selected. Today’s sample balance meets it; future cash flow is not modeled.",
+                          "$500 buffer selected. Today’s balance meets it; future cash flow is not modeled.",
                         );
                       }}
                     >
@@ -964,20 +973,30 @@ export function App() {
         {page === "active" && (
           <>
             <div className="success-symbol">
-              <Icon name={plan?.status === "paused" ? "pause" : "check"} />
+              <Icon
+                name={
+                  !plan ? "flag" : plan.status === "paused" ? "pause" : "check"
+                }
+              />
             </div>
             <span className="overline">
-              {plan?.status === "paused"
+              {!plan
+                ? "CURRENT PLAN"
+                : plan.status === "paused"
                 ? "PLAN PAUSED"
-                : "PLAN ACTIVE IN THIS DEMO"}
+                : "PLAN ACTIVE"}
             </span>
             <h1 ref={heading} tabIndex={-1} className="page-title">
-              {plan?.status === "paused"
+              {!plan
+                ? "Your Vacation Fund plan."
+                : plan.status === "paused"
                 ? "Take it at your pace."
                 : "Your plan, at a glance."}
             </h1>
             <p className="body-copy">
-              {plan?.status === "paused"
+              {!plan
+                ? `You’re setting aside ${money(goal.base)} each month toward ${money(goal.target)}.`
+                : plan.status === "paused"
                 ? "Your goal stays here. Resume when it works for you."
                 : "Your targets are saved. Stay flexible as life changes."}
             </p>
@@ -998,6 +1017,7 @@ export function App() {
                   <Button
                     secondary
                     onClick={() => {
+                      plannerReturn.current = "active";
                       setScenario(
                         plan.scenario.life
                           ? plan.scenario
@@ -1067,28 +1087,51 @@ export function App() {
                 <Forecast scenario={plan.scenario} goal={goal} />
                 <div className="feedback-example">
                   <span className="overline">
-                    FUTURE FEEDBACK · ILLUSTRATIVE ONLY
+                    WEEKLY CHECK-IN PREVIEW
                   </span>
                   <p>
                     “You’re $18 under your weekly dining target. Your Vacation
                     Fund remains on track.”
                   </p>
-                  <small>
-                    This message is an example, not a result from your current
-                    transactions.
-                  </small>
+                  <small>Guidance will reflect your latest activity.</small>
                 </div>
               </>
             )}
-            <p className="sample-note">
-              No real reminders are scheduled. No money has moved.
-            </p>
-            <Dock>
-              <Button secondary onClick={() => go("home")}>
-                Back to home
-                <Icon name="arrow" />
-              </Button>
-            </Dock>
+            {!plan && (
+              <div className="current-plan-overview">
+                <div className="current-plan-facts">
+                  <div>
+                    <span>Monthly contribution</span>
+                    <b>{money(goal.base)}</b>
+                  </div>
+                  <div>
+                    <span>Target date</span>
+                    <b>{dateLabel(addMonths(goal.months))}</b>
+                  </div>
+                  <div>
+                    <span>Projected by target</span>
+                    <b>{money(goal.saved + goal.base * goal.months)}</b>
+                  </div>
+                </div>
+                <CurrentPlanTrajectory goal={goal} />
+                <div className="plan-gap-note">
+                  <Icon name="flag" />
+                  <p>
+                    <strong>
+                      {money(
+                        goal.target - (goal.saved + goal.base * goal.months),
+                      )}{" "}
+                      remains at your current pace.
+                    </strong>
+                    Edit the plan to explore different ways to close the gap.
+                  </p>
+                </div>
+                <Button onClick={() => start("active")}>
+                  Edit plan
+                  <Icon name="edit" />
+                </Button>
+              </div>
+            )}
           </>
         )}
         {page === "goals" && (
@@ -1115,7 +1158,7 @@ export function App() {
             <h1 ref={heading} tabIndex={-1} className="page-title">
               Activity
             </h1>
-            <p className="body-copy">October 2026 · Synthetic account</p>
+            <p className="body-copy">October 2026</p>
             <label className="search-field">
               <Icon name="search" />
               <input
@@ -1142,7 +1185,7 @@ export function App() {
           </>
         )}
       </main>
-      {!flow && (
+      {(!flow || page === "planner") && (
         <nav className="bottom-nav" aria-label="Main navigation">
           {nav.map(([id, glyph, label]) => (
             <button
@@ -1156,9 +1199,21 @@ export function App() {
             </button>
           ))}
           <button
+            className={
+              page === "active" || page === "planner" ? "active" : ""
+            }
+            aria-current={
+              page === "active" || page === "planner" ? "page" : undefined
+            }
+            onClick={() => go("active")}
+          >
+            <Icon name="flag" />
+            <span>Plan</span>
+          </button>
+          <button
             className="placeholder-control"
             disabled
-            aria-label="Settings unavailable in this prototype"
+            aria-label="Settings unavailable"
           >
             <Icon name="settings" />
             <span>Settings</span>
@@ -1170,13 +1225,14 @@ export function App() {
           title={
             {
               evidence: "Behind the increase.",
-              correction: "What are we missing?",
+              correction: context ? "Edit your context" : "Add context",
               why: "How this was put together.",
               adjust: "Make it work for you.",
               ask: "What matters to you?",
               review: "Review your future",
               goal: "Make it yours.",
               about: "A little help, on your terms.",
+              profile: "Alex Chen",
               pause: "Pause this plan?",
               off: "Turn this plan off?",
             }[modal]
@@ -1202,7 +1258,7 @@ export function App() {
             <>
               <p>
                 These five additional purchases total $120. The comparison is
-                ten dining purchases totaling $200 over days 1–23 in each of the
+                ten dining purchases averaging $200 over days 1–23 across the
                 previous three months.
               </p>
               {analysis.contributing.map((t) => (
@@ -1218,7 +1274,7 @@ export function App() {
               </details>
               <p className="sheet-note">
                 Observed: 15 purchases through Oct 23, compared with 10 through
-                the 23rd in July–September. All data is synthetic.
+                the 23rd in July–September.
               </p>
             </>
           )}
@@ -1370,7 +1426,7 @@ export function App() {
             <form onSubmit={askAgent}>
               <p>
                 {mode === "live"
-                  ? "Describe the tradeoff in your own words. The agent will compare options using your sample spending."
+                  ? "Describe the tradeoff in your own words. The agent will compare options using your recent spending."
                   : "Try a preference below. Live natural-language planning becomes available when a server API key is configured."}
               </p>
               <textarea
@@ -1440,8 +1496,8 @@ export function App() {
                 </button>
               )}
               <p className="sheet-note">
-                The sample request and your synthetic spending are sent to the
-                model only in live mode. API keys remain on the server.
+                Your request and relevant spending are sent to the model only
+                in live mode. API keys remain on the server.
               </p>
             </form>
           )}
@@ -1490,7 +1546,7 @@ export function App() {
                 <label className="reminder-toggle">
                   <span>
                     <strong>Weekly check-in</strong>
-                    <small>Saved preference, no real notification</small>
+                    <small>Saved with your plan</small>
                   </span>
                   <input
                     type="checkbox"
@@ -1525,7 +1581,7 @@ export function App() {
                 <h3>With your approval</h3>
                 <p>
                   <Icon name="check" />
-                  Save targets and update projections in this demo.
+                  Save targets and update your projections.
                 </p>
                 <p>
                   <Icon name="close" />
@@ -1584,9 +1640,39 @@ export function App() {
                   : "Example mode is active. The server-side agent is implemented but no model API key is configured. Presets and projections work without AI."}
               </p>
               <p className="sheet-note">
-                Synthetic financial data. Browser-local persistence. No real
-                bank account, transfers, or notification service.
+                Your plan stays in this browser. Nothing is transferred
+                automatically.
               </p>
+            </>
+          )}
+          {modal === "profile" && (
+            <>
+              <div className="profile-summary">
+                <span className="avatar">AC</span>
+                <div>
+                  <strong>Alex Chen</strong>
+                  <small>Everyday checking · •• 4829</small>
+                </div>
+              </div>
+              <details className="demo-controls">
+                <summary>Demo controls</summary>
+                <p>
+                  Clear the current plan and return Money Moves to the opening
+                  Home screen.
+                </p>
+                <Button
+                  secondary
+                  onClick={() => {
+                    localStorage.removeItem("money-moves-v3");
+                    sessionStorage.removeItem("money-moves-life");
+                    sessionStorage.removeItem("money-moves-life-selected");
+                    window.location.replace(window.location.pathname);
+                  }}
+                >
+                  Start from the beginning
+                  <Icon name="repeat" />
+                </Button>
+              </details>
             </>
           )}
           {(modal === "pause" || modal === "off") && (
