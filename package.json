@@ -1,0 +1,8 @@
+{
+  "name": "money-moves-prototype",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test planning.test.js"
+  }
+}

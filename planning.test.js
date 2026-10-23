@@ -1,0 +1,10 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { simulate, suggestPlan, validateAdjustments } from './plan-engine.js';
+import { INITIAL_GOAL, transactions, spending, totalSpend } from './data.js';
+test('baseline identifies the actual savings gap',()=>assert.deepEqual(simulate(INITIAL_GOAL,{Dining:0,Shopping:0,Subscriptions:0}),{monthlyExtra:0,projected:760,gap:240,surplus:0,progress:76,needed:60}));
+test('sixty dollars a month closes the gap',()=>assert.equal(simulate(INITIAL_GOAL,{Dining:60,Shopping:0,Subscriptions:0}).projected,1000));
+test('protect dining preserves its budget and finds an alternative',()=>{const p=suggestPlan(INITIAL_GOAL,[],'Keep my Friday dinners');assert.equal(p.adjustments.Dining,0);assert.equal(p.adjustments.Shopping,60);assert.equal(simulate(INITIAL_GOAL,p.adjustments).gap,0)});
+test('an infeasible plan reports a gap rather than fabricating savings',()=>{const p=suggestPlan({...INITIAL_GOAL,target:10000},['Dining','Shopping','Subscriptions']);assert.ok(simulate({...INITIAL_GOAL,target:10000},p.adjustments).gap>0)});
+test('protected categories and allowed ranges are enforced',()=>assert.deepEqual(validateAdjustments({Dining:999,Shopping:-1,Subscriptions:20},['Subscriptions']),{Dining:120,Shopping:0,Subscriptions:0}));
+test('transaction evidence reconciles with all category totals',()=>{for(const c of spending){const sum=transactions.filter(t=>t.category===c.name).reduce((n,t)=>n+Math.round(t.amount*100),0);assert.equal(sum,c.total*100)}assert.equal(totalSpend,1280)});
