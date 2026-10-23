@@ -1,6 +1,8 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { icon } from "./icons.js";
+import { simulateLifeEvent } from "./life";
+import { emptyAdjustments } from "./model";
 import { money, dateLabel } from "./finance";
 import type { Goal, Scenario, Transaction } from "./model";
 export function Icon({ name }: { name: string }) {
@@ -146,15 +148,29 @@ export function Forecast({
   goal: Goal;
 }) {
   const p = scenario.projection,
-    max = Math.max(goal.target * 1.15, p.projected * 1.08);
+    max = Math.max(
+      goal.target * 1.15,
+      p.projected * 1.08,
+      ...(scenario.points || []).map((n) => n * 1.08),
+    );
   const y = (value: number) => 125 - (value / max) * 100;
   const points = (monthly: number) =>
     Array.from(
       { length: goal.months + 1 },
       (_, i) => `${8 + (i / goal.months) * 320},${y(goal.saved + monthly * i)}`,
     ).join(" ");
-  const baselinePoints = points(goal.base);
-  const planPoints = points(p.monthly);
+  const months = scenario.months || goal.months;
+  const fromValues = (values: number[]) =>
+    values.map((v, i) => `${8 + (i / months) * 320},${y(v)}`).join(" ");
+  const baselinePoints = scenario.life
+    ? fromValues(
+        simulateLifeEvent(goal, scenario.life, emptyAdjustments(), months)
+          .points,
+      )
+    : points(goal.base);
+  const planPoints = scenario.points
+    ? fromValues(scenario.points)
+    : points(p.monthly);
   return (
     <section className="forecast">
       <div className="forecast-heading">

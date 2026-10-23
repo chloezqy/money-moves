@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import { resolve, extname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { runGoalAgent, openAITransport } from "./agent";
+import { runLifeAgent } from "./life-agent";
 if (existsSync(".env")) process.loadEnvFile(".env");
 export function makeServer() {
   const production = process.argv.includes("--production");
@@ -23,7 +24,7 @@ export function makeServer() {
       json(200, { mode: key ? "live" : "example" });
       return;
     }
-    if (req.method === "POST" && path === "/api/plan") {
+    if (req.method === "POST" && ["/api/plan", "/api/life"].includes(path)) {
       const origin = req.headers.origin;
       if (
         origin &&
@@ -47,11 +48,9 @@ export function makeServer() {
             return;
           }
         }
-        const result = await runGoalAgent(
-          JSON.parse(body),
-          transport,
-          controller.signal,
-        );
+        const result = await (
+          path === "/api/life" ? runLifeAgent : runGoalAgent
+        )(JSON.parse(body), transport, controller.signal);
         json(200, result);
       } catch {
         if (!res.destroyed)

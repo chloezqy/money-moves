@@ -7,7 +7,8 @@
     "dev": "node dev.mjs",
     "build": "tsc --noEmit && vite build",
     "start": "node --import tsx server.ts --production",
-    "test": "node --import tsx --test finance.test.ts agent.test.ts"
+    "test": "node --import tsx --test finance.test.ts agent.test.ts life.test.ts",
+    "test:live": "node --import tsx --test life.live.test.ts"
   },
   "dependencies": {
     "react": "^19.0.0",

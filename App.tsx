@@ -1,3 +1,5 @@
+import { LifeHappens } from "./LifeHappens";
+import { validateFuture, generateFeasiblePaths, lifeStateSchema } from "./life";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
   AgentLabel,
@@ -43,7 +45,14 @@ import {
 } from "./model";
 
 type Page = "home" | "insight" | "planner" | "active" | "goals" | "activity";
-const pages: Page[] = ["home", "insight", "planner", "active", "goals", "activity"];
+const pages: Page[] = [
+  "home",
+  "insight",
+  "planner",
+  "active",
+  "goals",
+  "activity",
+];
 function pageFromHash(hash: string): Page {
   const candidate = hash.replace(/^#/, "") as Page;
   return pages.includes(candidate) ? candidate : "home";
@@ -65,7 +74,22 @@ function restore() {
     const raw = JSON.parse(localStorage.getItem("money-moves-v3") || "null");
     if (!raw) return null;
     goalSchema.parse(raw.goal);
-    if (raw.plan)
+    if (raw.plan?.scenario.life) {
+      validateFuture(
+        raw.goal,
+        raw.plan.preferences,
+        raw.plan.scenario.life,
+        raw.plan.scenario.adjustments,
+        raw.plan.scenario.months,
+      );
+      const fresh = generateFeasiblePaths(
+        raw.goal,
+        raw.plan.preferences,
+        raw.plan.scenario.life,
+      ).find((p) => p.id === raw.plan.scenario.id);
+      if (!fresh) return null;
+      raw.plan.scenario = fresh;
+    } else if (raw.plan)
       makeScenario(
         raw.goal,
         raw.plan.scenario.adjustments,
@@ -82,30 +106,89 @@ function restore() {
   }
 }
 const stored = restore();
+function restoreLifeDraft() {
+  try {
+    const state = lifeStateSchema.parse(
+      JSON.parse(sessionStorage.getItem("money-moves-life") || "null"),
+    );
+    if (
+      !state.event &&
+      state.protectedCategories.length === 2 &&
+      !state.deadlineHard &&
+      state.shoppingReduction === null &&
+      state.target === null
+    )
+      return null;
+    const paths = generateFeasiblePaths(
+      stored?.goal || initialGoal,
+      {
+        ...defaultPreferences(),
+        protectedCategories: state.protectedCategories,
+      },
+      state,
+    );
+    return (
+      paths.find(
+        (p) => p.id === sessionStorage.getItem("money-moves-life-selected"),
+      ) ||
+      paths[0] ||
+      null
+    );
+  } catch {
+    return null;
+  }
+}
+const lifeDraft = restoreLifeDraft();
+const plannerDraft =
+  pageFromHash(location.hash) === "planner" ? lifeDraft : null;
+
 const analysis = spendingAnalysis();
 const pendingWords = [
   "Reviewing your spending and preferences",
   "Comparing options with your Vacation Fund",
 ];
 export function App() {
-  const [page, setPage] = useState<Page>(
-    pageFromHash(location.hash),
-  );
+  const [page, setPage] = useState<Page>(pageFromHash(location.hash));
   const [goal, setGoal] = useState<Goal>(stored?.goal || initialGoal);
   const [plan, setPlan] = useState<ActivePlan | null>(stored?.plan || null);
   const [preferences, setPreferences] = useState<Preferences>(
-    stored?.plan?.preferences || defaultPreferences(),
+    (plannerDraft
+      ? {
+          ...defaultPreferences(),
+          protectedCategories: plannerDraft.life.protectedCategories,
+        }
+      : null) ||
+      stored?.plan?.preferences ||
+      (lifeDraft
+        ? {
+            ...defaultPreferences(),
+            protectedCategories: lifeDraft.life.protectedCategories,
+          }
+        : defaultPreferences()),
   );
-  const [scenario, setScenario] = useState(() =>
-    stored?.plan
-      ? makeScenario(
-          stored.goal,
-          stored.plan.scenario.adjustments,
-          stored.plan.preferences,
-          stored.plan.scenario.title,
-        )
-      : calculateSuggestion(stored?.goal || initialGoal),
+  const [scenario, setScenario] = useState(
+    () =>
+      plannerDraft ||
+      (stored?.plan?.scenario.life
+        ? stored.plan.scenario
+        : stored?.plan
+          ? makeScenario(
+              stored.goal,
+              stored.plan.scenario.adjustments,
+              stored.plan.preferences,
+              stored.plan.scenario.title,
+            )
+          : lifeDraft || calculateSuggestion(stored?.goal || initialGoal)),
   );
+  const [lifeBlocked, setLifeBlocked] = useState(false);
+  const [lifeBusy, setLifeBusy] = useState(false);
+  useEffect(() => {
+    if (scenario.life && page === "planner") {
+      try {
+        sessionStorage.setItem("money-moves-life-selected", scenario.id);
+      } catch {}
+    }
+  }, [scenario, page]);
   const [alternatives, setAlternatives] = useState<Scenario[]>([]);
   const [modal, setModal] = useState<Modal>(null);
   const [context, setContext] = useState(stored?.context || "");
@@ -269,6 +352,20 @@ export function App() {
     }
   }
   function activate() {
+    if (scenario.life) {
+      try {
+        validateFuture(
+          goal,
+          preferences,
+          scenario.life,
+          scenario.adjustments,
+          scenario.months!,
+        );
+      } catch {
+        setToast("This path needs to be recalculated before activation.");
+        return;
+      }
+    }
     setPlan({
       scenario,
       preferences,
@@ -288,7 +385,9 @@ export function App() {
     ["goals", "flag", "Goals"],
   ] as const;
   return (
-    <div className={`app-shell ${flow ? "flow" : ""}`}>
+    <div
+      className={`app-shell ${flow ? "flow" : ""} ${page === "planner" ? "planner-shell" : ""}`}
+    >
       {flow ? (
         <header className="flow-header">
           <IconButton
@@ -340,9 +439,7 @@ export function App() {
           <>
             <section className="balance-section">
               <div className="greeting">Good morning, Alex</div>
-              <div className="balance-caption">
-                Available balance
-              </div>
+              <div className="balance-caption">Available balance</div>
               <h1 ref={heading} tabIndex={-1} className="balance">
                 $8,452<span>.80</span>
               </h1>
@@ -389,9 +486,7 @@ export function App() {
                     Later
                   </button>
                 </div>
-                <h2>
-                  A small pattern changed.
-                </h2>
+                <h2>A small pattern changed.</h2>
                 <div className="insight-metrics">
                   <div>
                     <small>DINING · OCT 1–23</small>
@@ -404,7 +499,9 @@ export function App() {
                     <i style={{ "--metric": "62.5%" } as React.CSSProperties} />
                   </div>
                 </div>
-                <div className="insight-delta"><b>+$120</b> above your recent pace</div>
+                <div className="insight-delta">
+                  <b>+$120</b> above your recent pace
+                </div>
                 <p>
                   Five more small purchases explain the difference. See the
                   evidence, then decide whether it matters for your goal.
@@ -561,265 +658,301 @@ export function App() {
                 {money(goal.saved)} / {money(goal.target)}
               </b>
             </div>
-            <p className="recommendation-copy">
-              {money(p.extra)} more each month.{" "}
-              {preferences.protectedCategories.includes("Dining")
-                ? "Keep dining as it is."
-                : "Start with one small change."}
-            </p>
-            <span className="planner-step">02 · YOUR CHOICES</span>
-            <div className="plan-options">
-              <button
-                className={
-                  !preferences.protectedCategories.includes("Dining")
-                    ? "selected"
-                    : ""
-                }
-                onClick={() => usePreset("small")}
-                aria-pressed={
-                  !preferences.protectedCategories.includes("Dining")
-                }
-              >
-                <Icon name="flag" />
-                Suggested
-              </button>
-              <button
-                className={
-                  preferences.protectedCategories.includes("Dining")
-                    ? "selected"
-                    : ""
-                }
-                onClick={() => usePreset("dining")}
-                aria-pressed={preferences.protectedCategories.includes(
-                  "Dining",
-                )}
-              >
-                <Icon name="utensils" />
-                Keep dining
-              </button>
-              <IconButton
-                name="settings"
-                label="Adjust monthly amounts"
-                onClick={() => setModal("adjust")}
-              />
-            </div>
-            <div className="section-title">
-              <h2>Your monthly change</h2>
-              <button
-                className="text-button"
-                onClick={() => setModal("adjust")}
-              >
-                Edit
-              </button>
-            </div>
-            {adjustable
-              .filter((c) => scenario.adjustments[c] > 0)
-              .map((c) => (
-                <div className="plan-change" key={c}>
-                  <span className="merchant-icon">
-                    <Icon
-                      name={
-                        c === "Dining"
-                          ? "utensils"
-                          : c === "Shopping"
-                            ? "bag"
-                            : c === "Entertainment"
-                              ? "music"
-                              : "repeat"
-                      }
-                    />
-                  </span>
-                  <div>
-                    <strong>{c}</strong>
-                    <small>
-                      {money(currentTotals[c])} →{" "}
-                      {money(currentTotals[c] - scenario.adjustments[c])} /
-                      month
-                    </small>
-                  </div>
-                  <b>−{money(scenario.adjustments[c])}</b>
-                </div>
-              ))}
-            {p.extra === 0 && (
-              <p className="body-copy">No new spending targets.</p>
-            )}
-            {!preferences.protectedCategories.includes("Dining") && (
-              <label className="inline-slider">
-                <span>
-                  <span>Dining adjustment</span>
-                  <b>{money(scenario.adjustments.Dining)} less / month</b>
-                </span>
-                <input
-                  type="range"
-                  min={0}
-                  max={120}
-                  step={5}
-                  value={scenario.adjustments.Dining}
-                  aria-label="Dining monthly reduction"
-                  onPointerDown={remember}
-                  onKeyDown={(e) => {
-                    if (e.key.startsWith("Arrow")) remember();
-                  }}
-                  onChange={(e) => modify("Dining", Number(e.target.value))}
-                  style={
-                    {
-                      "--fill": `${(scenario.adjustments.Dining / 120) * 100}%`,
-                    } as React.CSSProperties
-                  }
-                />
-                <small>
-                  <span>$0</span>
-                  <span>$120 / month</span>
-                </small>
-              </label>
-            )}
-            <div className="protected-note">
-              <Icon name="shield" />
-              {preferences.protectedCategories.join(", ")} protected
-            </div>
-            {response && (
-              <div
-                className={`agent-result ${response.source === "fallback" ? "fallback" : ""}`}
-                role="status"
-              >
-                <div className="agent-result-heading">
-                  <Icon name={response.source === "live" ? "check" : "info"} />
-                  <strong>
-                    {response.source === "live"
-                      ? "Money Moves understood your priority"
-                      : response.source === "fallback"
-                        ? "Live planning unavailable · calculated example"
-                        : "Calculated example · no live AI"}
-                  </strong>
-                </div>
-                <p>{response.summary}</p>
-                {response.constraints.length > 0 && (
-                  <div className="understood-priorities">
-                    <span>Understood</span>
-                    {response.constraints.map((constraint) => (
-                      <b key={constraint}><Icon name="lock" />{constraint}</b>
-                    ))}
-                  </div>
-                )}
-                <details>
-                  <summary>How this plan was built</summary>
-                  <ul>
-                    {response.toolActivity.map((s) => (
-                      <li key={s}>{s}</li>
-                    ))}
-                  </ul>
-                  <p>{scenario.rationale}</p>
-                  {scenario.tradeoffs.map((s) => <p key={s}>{s}</p>)}
-                  {response.limitations.map((s) => <p key={s}>{s}</p>)}
-                </details>
-              </div>
-            )}
-            <span className="planner-step future-step">03 · YOUR FUTURE</span>
-            <Forecast scenario={scenario} goal={goal} />
-            <button
-              className="calculation-link"
-              onClick={() => setModal("why")}
-            >
-              Assumptions and evidence
-              <Icon name="info" />
-            </button>
-            {alternatives.length > 0 && (
-              <div className="alternatives">
-                <h2>Another way to get there</h2>
-                {alternatives.map((s) => (
+            <LifeHappens
+              goal={goal}
+              preferences={preferences}
+              selected={scenario}
+              mode={mode}
+              onBusy={setLifeBusy}
+              onClear={() => setLifeBlocked(true)}
+              onSelect={(next, prefs) => {
+                setScenario(next);
+                setPreferences(prefs);
+                setLifeBlocked(false);
+              }}
+            />
+            {!scenario.life && !lifeBlocked && (
+              <details className="manual-planner">
+                <summary>Or adjust your plan manually</summary>
+                <p className="recommendation-copy">
+                  {money(p.extra)} more each month.{" "}
+                  {preferences.protectedCategories.includes("Dining")
+                    ? "Keep dining as it is."
+                    : "Start with one small change."}
+                </p>
+                <span className="planner-step">02 · YOUR CHOICES</span>
+                <div className="plan-options">
                   <button
-                    key={s.id}
-                    onClick={() => {
-                      remember();
-                      setAlternatives([scenario]);
-                      setScenario(s);
-                    }}
-                  >
-                    <span>
-                      {s.title}
-                      <small>
-                        {money(s.projection.extra)} extra / month ·{" "}
-                        {s.projection.gap
-                          ? `${money(s.projection.gap)} short`
-                          : "On target"}
-                      </small>
-                    </span>
-                    <Icon name="arrow" />
-                  </button>
-                ))}
-              </div>
-            )}
-            <section className="preference-section">
-              <h2>Anything you don’t want to change?</h2>
-              <div className="constraint-chips">
-                {[
-                  ["Dining", "Keep dining as-is"],
-                  ["Groceries", "Protect groceries"],
-                  ["Subscriptions", "No subscription changes"],
-                ].map(([c, label]) => (
-                  <button
-                    key={c}
                     className={
-                      preferences.protectedCategories.includes(c as Category)
+                      !preferences.protectedCategories.includes("Dining")
                         ? "selected"
                         : ""
                     }
-                    aria-pressed={preferences.protectedCategories.includes(
-                      c as Category,
-                    )}
-                    onClick={() => protect(c as Category)}
+                    onClick={() => usePreset("small")}
+                    aria-pressed={
+                      !preferences.protectedCategories.includes("Dining")
+                    }
                   >
-                    <Icon
-                      name={
-                        preferences.protectedCategories.includes(c as Category)
-                          ? "lock"
-                          : "plus"
+                    <Icon name="flag" />
+                    Suggested
+                  </button>
+                  <button
+                    className={
+                      preferences.protectedCategories.includes("Dining")
+                        ? "selected"
+                        : ""
+                    }
+                    onClick={() => usePreset("dining")}
+                    aria-pressed={preferences.protectedCategories.includes(
+                      "Dining",
+                    )}
+                  >
+                    <Icon name="utensils" />
+                    Keep dining
+                  </button>
+                  <IconButton
+                    name="settings"
+                    label="Adjust monthly amounts"
+                    onClick={() => setModal("adjust")}
+                  />
+                </div>
+                <div className="section-title">
+                  <h2>Your monthly change</h2>
+                  <button
+                    className="text-button"
+                    onClick={() => setModal("adjust")}
+                  >
+                    Edit
+                  </button>
+                </div>
+                {adjustable
+                  .filter((c) => scenario.adjustments[c] > 0)
+                  .map((c) => (
+                    <div className="plan-change" key={c}>
+                      <span className="merchant-icon">
+                        <Icon
+                          name={
+                            c === "Dining"
+                              ? "utensils"
+                              : c === "Shopping"
+                                ? "bag"
+                                : c === "Entertainment"
+                                  ? "music"
+                                  : "repeat"
+                          }
+                        />
+                      </span>
+                      <div>
+                        <strong>{c}</strong>
+                        <small>
+                          {money(currentTotals[c])} →{" "}
+                          {money(currentTotals[c] - scenario.adjustments[c])} /
+                          month
+                        </small>
+                      </div>
+                      <b>−{money(scenario.adjustments[c])}</b>
+                    </div>
+                  ))}
+                {p.extra === 0 && (
+                  <p className="body-copy">No new spending targets.</p>
+                )}
+                {!preferences.protectedCategories.includes("Dining") && (
+                  <label className="inline-slider">
+                    <span>
+                      <span>Dining adjustment</span>
+                      <b>{money(scenario.adjustments.Dining)} less / month</b>
+                    </span>
+                    <input
+                      type="range"
+                      min={0}
+                      max={120}
+                      step={5}
+                      value={scenario.adjustments.Dining}
+                      aria-label="Dining monthly reduction"
+                      onPointerDown={remember}
+                      onKeyDown={(e) => {
+                        if (e.key.startsWith("Arrow")) remember();
+                      }}
+                      onChange={(e) => modify("Dining", Number(e.target.value))}
+                      style={
+                        {
+                          "--fill": `${(scenario.adjustments.Dining / 120) * 100}%`,
+                        } as React.CSSProperties
                       }
                     />
-                    {label}
-                  </button>
-                ))}
-                <button
-                  className={
-                    preferences.checkingBuffer === 500 ? "selected" : ""
-                  }
-                  onClick={() => {
-                    remember();
-                    setPreferences({...preferences, checkingBuffer:500});
-                    setToast(
-                      "$500 buffer selected. Today’s sample balance meets it; future cash flow is not modeled.",
-                    );
-                  }}
-                >
+                    <small>
+                      <span>$0</span>
+                      <span>$120 / month</span>
+                    </small>
+                  </label>
+                )}
+                <div className="protected-note">
                   <Icon name="shield" />
-                  $500 checking buffer
+                  {preferences.protectedCategories.join(", ")} protected
+                </div>
+                {response && (
+                  <div
+                    className={`agent-result ${response.source === "fallback" ? "fallback" : ""}`}
+                    role="status"
+                  >
+                    <div className="agent-result-heading">
+                      <Icon
+                        name={response.source === "live" ? "check" : "info"}
+                      />
+                      <strong>
+                        {response.source === "live"
+                          ? "Money Moves understood your priority"
+                          : response.source === "fallback"
+                            ? "Live planning unavailable · calculated example"
+                            : "Calculated example · no live AI"}
+                      </strong>
+                    </div>
+                    <p>{response.summary}</p>
+                    {response.constraints.length > 0 && (
+                      <div className="understood-priorities">
+                        <span>Understood</span>
+                        {response.constraints.map((constraint) => (
+                          <b key={constraint}>
+                            <Icon name="lock" />
+                            {constraint}
+                          </b>
+                        ))}
+                      </div>
+                    )}
+                    <details>
+                      <summary>How this plan was built</summary>
+                      <ul>
+                        {response.toolActivity.map((s) => (
+                          <li key={s}>{s}</li>
+                        ))}
+                      </ul>
+                      <p>{scenario.rationale}</p>
+                      {scenario.tradeoffs.map((s) => (
+                        <p key={s}>{s}</p>
+                      ))}
+                      {response.limitations.map((s) => (
+                        <p key={s}>{s}</p>
+                      ))}
+                    </details>
+                  </div>
+                )}
+                <span className="planner-step future-step">
+                  03 · YOUR FUTURE
+                </span>
+                <Forecast scenario={scenario} goal={goal} />
+                <button
+                  className="calculation-link"
+                  onClick={() => setModal("why")}
+                >
+                  Assumptions and evidence
+                  <Icon name="info" />
                 </button>
-              </div>
-              <button className="ask-row" onClick={() => setModal("ask")}>
-                <Icon name="chat" />
-                <span>Tell Money Moves what matters</span>
-                <Icon name="chevron" />
-              </button>
-              <button
-                className="text-button"
-                disabled={!canUndo}
-                onClick={() => {
-                  const old = history.current.pop();
-                  if (old) {
-                    setScenario(old.scenario);
-                    setPreferences(old.preferences);
-                    setCanUndo(history.current.length > 0);
-                    setResponse(null);
-                    setAlternatives([]);
-                  }
-                }}
+                {alternatives.length > 0 && (
+                  <div className="alternatives">
+                    <h2>Another way to get there</h2>
+                    {alternatives.map((s) => (
+                      <button
+                        key={s.id}
+                        onClick={() => {
+                          remember();
+                          setAlternatives([scenario]);
+                          setScenario(s);
+                        }}
+                      >
+                        <span>
+                          {s.title}
+                          <small>
+                            {money(s.projection.extra)} extra / month ·{" "}
+                            {s.projection.gap
+                              ? `${money(s.projection.gap)} short`
+                              : "On target"}
+                          </small>
+                        </span>
+                        <Icon name="arrow" />
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <section className="preference-section">
+                  <h2>Anything you don’t want to change?</h2>
+                  <div className="constraint-chips">
+                    {[
+                      ["Dining", "Keep dining as-is"],
+                      ["Groceries", "Protect groceries"],
+                      ["Subscriptions", "No subscription changes"],
+                    ].map(([c, label]) => (
+                      <button
+                        key={c}
+                        className={
+                          preferences.protectedCategories.includes(
+                            c as Category,
+                          )
+                            ? "selected"
+                            : ""
+                        }
+                        aria-pressed={preferences.protectedCategories.includes(
+                          c as Category,
+                        )}
+                        onClick={() => protect(c as Category)}
+                      >
+                        <Icon
+                          name={
+                            preferences.protectedCategories.includes(
+                              c as Category,
+                            )
+                              ? "lock"
+                              : "plus"
+                          }
+                        />
+                        {label}
+                      </button>
+                    ))}
+                    <button
+                      className={
+                        preferences.checkingBuffer === 500 ? "selected" : ""
+                      }
+                      onClick={() => {
+                        remember();
+                        setPreferences({ ...preferences, checkingBuffer: 500 });
+                        setToast(
+                          "$500 buffer selected. Today’s sample balance meets it; future cash flow is not modeled.",
+                        );
+                      }}
+                    >
+                      <Icon name="shield" />
+                      $500 checking buffer
+                    </button>
+                  </div>
+                  <button className="ask-row" onClick={() => setModal("ask")}>
+                    <Icon name="chat" />
+                    <span>Tell Money Moves what matters</span>
+                    <Icon name="chevron" />
+                  </button>
+                  <button
+                    className="text-button"
+                    disabled={!canUndo}
+                    onClick={() => {
+                      const old = history.current.pop();
+                      if (old) {
+                        setScenario(old.scenario);
+                        setPreferences(old.preferences);
+                        setCanUndo(history.current.length > 0);
+                        setResponse(null);
+                        setAlternatives([]);
+                      }
+                    }}
+                  >
+                    <Icon name="left" />
+                    Undo last change
+                  </button>
+                </section>
+              </details>
+            )}
+            <Dock note="Choose freely. No money will be transferred automatically.">
+              <Button
+                disabled={lifeBlocked || lifeBusy}
+                onClick={() => setModal("review")}
               >
-                <Icon name="left" />
-                Undo last change
-              </button>
-            </section>
-            <Dock note="Targets stay yours. Nothing transfers automatically.">
-              <Button onClick={() => setModal("review")}>
                 Review my plan
                 <Icon name="arrow" />
               </Button>
@@ -846,10 +979,29 @@ export function App() {
                 ? "Your goal stays here. Resume when it works for you."
                 : "A little more room for what matters. Change it anytime."}
             </p>
-            <GoalProgress goal={goal} />
+            <GoalProgress
+              goal={
+                plan?.scenario.life
+                  ? {
+                      ...goal,
+                      months: plan.scenario.months!,
+                      target: plan.scenario.life.target ?? goal.target,
+                    }
+                  : goal
+              }
+            />
             {plan && (
               <>
                 <div className="saved-plan-lines">
+                  <div>
+                    <span>Planned goal date</span>
+                    <b>{dateLabel(plan.scenario.projection.targetDate)}</b>
+                  </div>
+                  {plan.scenario.life?.event && (
+                    <p className="sheet-note">
+                      {plan.scenario.tradeoffs.at(-1)}
+                    </p>
+                  )}
                   <div>
                     <span>Extra toward your goal</span>
                     <b>{money(plan.scenario.projection.extra)} / month</b>
@@ -891,12 +1043,14 @@ export function App() {
                     secondary
                     onClick={() => {
                       setScenario(
-                        makeScenario(
-                          goal,
-                          plan.scenario.adjustments,
-                          plan.preferences,
-                          plan.scenario.title,
-                        ),
+                        plan.scenario.life
+                          ? plan.scenario
+                          : makeScenario(
+                              goal,
+                              plan.scenario.adjustments,
+                              plan.preferences,
+                              plan.scenario.title,
+                            ),
                       );
                       setPreferences(plan.preferences);
                       go("planner");
@@ -1046,8 +1200,8 @@ export function App() {
             <>
               <p>
                 These five additional purchases total $120. The comparison is
-                ten dining purchases totaling $200 over days 1–23 in each of
-                the previous three months.
+                ten dining purchases totaling $200 over days 1–23 in each of the
+                previous three months.
               </p>
               {analysis.contributing.map((t) => (
                 <TransactionRow key={t.id} transaction={t} />
@@ -1118,7 +1272,7 @@ export function App() {
                 </div>
                 <div>
                   <span>Months remaining</span>
-                  <b>{goal.months}</b>
+                  <b>{scenario.months || goal.months}</b>
                 </div>
                 <div className="math-total">
                   <span>Projected savings</span>
@@ -1127,9 +1281,18 @@ export function App() {
               </div>
               <p className="sheet-note">
                 {money(goal.saved)} + ({money(goal.base)} + {money(p.extra)}) ×{" "}
-                {goal.months}. Assumes the full reduction is saved. No interest,
-                withdrawals, or automatic transfers. A checking-buffer check
-                uses today’s balance only.
+                {scenario.months || goal.months}
+                {scenario.life?.event &&
+                scenario.life.event.funding !== "checking" &&
+                scenario.life.event.month <= (scenario.months || goal.months)
+                  ? ` − ${money(scenario.life.event.amount)} one-time expense`
+                  : ""}
+                . Assumes the full reduction is saved.{" "}
+                {scenario.life?.event
+                  ? scenario.tradeoffs.at(-1)
+                  : "No withdrawals modeled."}{" "}
+                No interest or automatic transfers. A checking-buffer check uses
+                today’s balance only.
               </p>
             </>
           )}
@@ -1284,9 +1447,28 @@ export function App() {
             <>
               <div className="review-amount">
                 +{money(p.extra)}
-                <span>toward your goal each month</span>
+                <span>
+                  additional monthly savings · {money(p.monthly)} total
+                </span>
               </div>
               <div className="review-changes">
+                <div>
+                  <span>Goal date</span>
+                  <b>
+                    {dateLabel(addMonths(goal.months))} →{" "}
+                    {dateLabel(p.targetDate)}
+                  </b>
+                </div>
+                <div>
+                  <span>Total savings target</span>
+                  <b>{money(p.monthly)} / month</b>
+                </div>
+                {scenario.life?.event && (
+                  <p className="sheet-note">{scenario.tradeoffs.at(-1)}</p>
+                )}
+                <p className="sheet-note">
+                  {preferences.protectedCategories.join(", ")} stay protected.
+                </p>
                 {adjustable
                   .filter((c) => scenario.adjustments[c] > 0)
                   .map((c) => (
@@ -1340,8 +1522,8 @@ export function App() {
                 </p>
                 <p>
                   <Icon name="close" />
-                  No automatic transfers, transaction blocking, or account
-                  changes.
+                  No money will be transferred automatically. No transaction
+                  blocking or bank account changes.
                 </p>
               </div>
               {p.gap > 0 && (
@@ -1357,7 +1539,10 @@ export function App() {
                 Activate plan
                 <Icon name="check" />
               </Button>
-              <Button secondary onClick={() => setModal("adjust")}>
+              <Button
+                secondary
+                onClick={() => setModal(scenario.life ? null : "adjust")}
+              >
                 Edit plan
               </Button>
             </>

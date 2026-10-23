@@ -1,3 +1,4 @@
+import type { LifeState } from "./life";
 import { z } from "zod";
 export const categorySchema = z.enum([
   "Dining",
@@ -83,6 +84,10 @@ export interface Projection {
   baseline: number;
 }
 export interface Scenario {
+  life?: LifeState;
+  months?: number;
+  points?: number[];
+  feasible?: boolean;
   id: string;
   title: string;
   adjustments: Adjustments;

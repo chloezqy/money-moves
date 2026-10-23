@@ -160,18 +160,27 @@ type Transport = (
 ) => Promise<{ output: Array<Record<string, any>> }>;
 export function openAITransport(key: string, model: string): Transport {
   return async (payload, signal) => {
-    const response = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${key}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ model, store: false, ...payload }),
-      signal: signal
-        ? AbortSignal.any([signal, AbortSignal.timeout(20000)])
-        : AbortSignal.timeout(20000),
-    });
-    if (!response.ok)
+    let response: Response | undefined;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        response = await fetch("https://api.openai.com/v1/responses", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${key}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ model, store: false, ...payload }),
+          signal: signal
+            ? AbortSignal.any([signal, AbortSignal.timeout(20000)])
+            : AbortSignal.timeout(20000),
+        });
+        if (response.status >= 500 && attempt < 2) continue;
+        break;
+      } catch (error) {
+        if (signal?.aborted || attempt === 2) throw error;
+      }
+    }
+    if (!response?.ok)
       throw new Error("The model service could not complete this request");
     return response.json();
   };

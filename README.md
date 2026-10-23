@@ -1,132 +1,102 @@
-# Money Moves
+# Money Moves — Life Happens
 
-A mobile-first spending insight and goal-planning prototype inside fictional **ABC Bank**. Built for a design engineering interview: one coherent journey from a spending change to an explicitly approved plan.
+**One goal. Multiple possible futures. Human choice.** A financial future simulator inside the existing fictional ABC Bank journey: Home → Insight → Planner → Review → Active Plan.
 
-## 1. Problem
+Life Happens turns a life change into editable constraints and comparable financial paths. Alex can preserve dinner with friends, budget for a wedding, explore a later vacation, and change their mind without starting over. The interface uses branching trajectories, restrained cobalt and earth tones, warm neutral surfaces, and serif financial numerals. Every screen, including Life Happens, uses the same mobile-first canvas capped at 440px, including on desktop.
 
-Transaction lists and spending charts describe what happened. They often leave people to figure out why it matters and what to do next. Money Moves connects evidence to an existing goal and offers an adjustable next step.
+## Run
 
-## 2. Product concept
-
-Alex has $400 saved toward a $1,000 Vacation Fund, targeting five months from the sample date. Dining is $320 through October 23 versus $200 over the same 23-day window in each of the prior three months. Five additional small purchases account for the $120 increase. Money Moves helps Alex understand this change and explore a workable savings plan.
-
-## 3. Why AI adds value
-
-A language model is useful when Alex says, “I eat out with friends a lot. Find another way.” The goal-planning agent translates lifestyle constraints into protected categories, consults deterministic tools, and proposes structured alternatives. It does not calculate money, move funds, or replace direct controls. The insight and default plan work without an LLM.
-
-## 4. Design principles
-
-Evidence before trust; progressive disclosure; calm proactivity; estimates instead of certainty; reversible choices; explicit approval for activation. A neutral surface, one blue accent, system typography, restrained borders, and mostly unboxed rows keep the experience close to a banking product. The mobile interface is capped at 440px; `/preview` presents two 390 × 844 views for a laptop demonstration.
-
-## 5. User journey
-
-1. **Home:** balance, goal progress, one dismissible insight, recent transactions.
-2. **Insight:** current versus historical dining, contributing transactions, observed facts versus interpretation, and “Not quite?” context correction.
-3. **Planner:** adjust dining directly, inspect other monthly reductions, protect categories, compare a dining-preserving preset, or make a natural-language request. Projections update immediately; changes can be undone.
-4. **Review:** inspect the exact monthly targets and check-in preference before activation. Clearly states what will be saved and that no money moves.
-5. **Active plan:** progress, targets, forecast, saved check-in preference, edit/pause/resume/turn off. Future feedback is explicitly illustrative.
-
-A three-minute demo: Home → See what changed → contributing purchases → Explore → drag dining from $60 to $55 → Keep dining → explain a constraint → Review → Activate → Pause.
-
-## 6. Architecture
-
-| File                               | Responsibility                                                                     |
-| ---------------------------------- | ---------------------------------------------------------------------------------- |
-| `App.tsx`                          | Screen flow, reversible draft scenarios, approval, browser-local persistence       |
-| `components.tsx`                   | Buttons, icons, goal progress, forecast, transaction rows, accessible bottom sheet |
-| `styles.css`                       | Typography, spacing/surface/color tokens, mobile layout and restrained motion      |
-| `model.ts`                         | TypeScript domain types and Zod validation                                         |
-| `fixtures.ts`                      | Five months of synthetic financial activity                                        |
-| `finance.ts`                       | Totals, baseline, projections, reduction limits and deterministic examples         |
-| `agent.ts`                         | Server-side Responses API tool loop, structured-output validation and fallback     |
-| `server.ts`                        | Small local HTTP API, environment loading and optional built static serving        |
-| `dev.mjs`                          | Starts API and Vite together; stops both on exit                                   |
-| `finance.test.ts`, `agent.test.ts` | Financial invariants, mocked agent tool orchestration and HTTP boundary checks     |
-
-React state is deliberately local to the application; there is no database, authentication, global state framework or orchestration framework. Earlier vanilla-JavaScript files (`app.js`, `data.js`, `plan-engine.js`, `planning.test.js`) remain as an unimported snapshot of the prior prototype. The active application starts at `main.tsx`. React replaces the rendering layer while retaining the mobile navigation, bottom sheets, editable budgets, review flow and plan controls from that baseline.
-
-## 7. Deterministic versus AI-powered
-
-**Deterministic:** observed amounts and transaction counts, historical averages, category limits, checking-buffer check, goal dates, projected savings, charts, presets, validation, persistence and activation.
-
-**AI-powered, when configured:** interpreting open-ended constraints, selecting tools, proposing up to two alternatives, and explaining tradeoffs. The model's interpretation is translated into protected-category chips, editable targets, alternatives and a recalculated forecast—not appended as a chat transcript. All proposed amounts are validated and recalculated before the UI uses them. The home insight's initial interpretation is authored demo content, not a live autonomous monitoring result.
-
-Projection: `saved + (scheduled monthly saving + monthly spending reductions) × months`. Alex's baseline is `400 + 60 × 5 = 700`. A $60 reduction produces `400 + (60 + 60) × 5 = 1,000`. The full reduction must actually be saved; no interest, withdrawals, automatic transfers, or future cash flow are modeled. October 1–23 is compared with days 1–23 of July, August and September. The fixture happens to contain the same ten routine purchases in each equivalent window; production logic would need account-specific normalization and seasonality handling.
-
-## 8. Agent and tool flow
-
-The server uses OpenAI's Responses API with strict function schemas and a strict final JSON schema. It exposes:
-
-- `analyze_spending`: observed totals, counts, baseline and contributing purchase evidence.
-- `find_adjustable_categories`: current discretionary totals, prototype reduction caps, protected categories and sample balance.
-- `get_goal_projection`: goal and deterministic baseline projection.
-- `simulate_scenario`: validate constraints and calculate the proposed scenario.
-
-The agent has an eight-step maximum. Every live recommendation must follow successful spending/category/goal tool calls and exactly match a successfully simulated adjustment. Zod validates the output; domain checks preserve protected categories and reduction caps. Explicit protections win over conflicting requested reductions. Final amounts are recalculated in TypeScript, never trusted from model prose. Groceries and bills remain protected. No tool can execute a financial action.
-
-Loading is shown as a brief activity status, not hidden model reasoning. Cancellation preserves the draft. Malformed output, missing tools, invalid amounts and API failures return a clearly marked calculated fallback. A network failure between browser and local server leaves the request intact and offers retry. A requested buffer above today's sample balance produces no new scenario. No API key means labeled **Example mode**, with a small phrase-based preference parser; it is not presented as live AI.
-
-## 9. Synthetic data
-
-All names, balances and transactions are intentionally synthetic. June–October 2026 include dining, groceries, transport, entertainment, subscriptions, shopping and bills. Dining has ten $20 purchases each month. October adds $18, $22, $24, $28 and $28. Other categories support alternative planning. The fixed sample date is October 23, 2026; the initial target date is March 23, 2027.
-
-## 10. Trust and safety decisions
-
-Observed facts and interpretation have separate labels. Corrections add context without altering transaction records. Projections are estimates. Evidence and assumptions are inspectable. Preferences are explicit, essentials are protected, and consequences are described before activation. Draft adjustments do not change the active plan until approval. Pausing and turning off are available. No bank connection, transfers, payment blocking, real monitoring or actual reminders exist.
-
-The model only receives the synthetic fixture/tool results, the planning request, saved context and stated preferences. API credentials stay server-side. The API rejects invalid input, limits request size, restricts browser origins and binds to localhost. This is a local demo, not a hardened public financial service.
-
-## 11. Accessibility
-
-Semantic controls, visible keyboard focus, named icon buttons, labeled ranges, text equivalents for charts, non-color status labels, focus trapping/return in dialogs, Escape dismissal, and reduced-motion support are implemented. Native input text stays at least 16px on mobile to avoid focus zoom. Primary controls are at least 40–48px high; smaller text links have expanded hit areas. Contrast uses dark text on neutral surfaces. Automated unit tests are not an accessibility certification; screen-reader and device testing remain necessary before release.
-
-## 12. Stack
-
-React 19, TypeScript, Vite, Zod, Node's HTTP server, native server-side `fetch`, OpenAI Responses API, and Node's test runner. Use Node 22.6+ (Node 24 recommended). No external font or illustration request is required.
-
-## 13. Run locally
-
-```bash
-git pull
+```sh
 npm install
 npm run dev
-```
-
-Open `http://localhost:5173/`. For the interview presentation, open `http://localhost:5173/preview`. The API runs on `127.0.0.1:5174` behind Vite's `/api` proxy. Keep both ports free. The dev script accepts `--host` and `--port` when a preview environment requires them.
-
-```bash
+# http://127.0.0.1:5173
 npm test
+npm run test:live
 npm run build
 npm start
 ```
 
-The last command serves the built app and API locally on port 5173. `API_PORT` can override its port. The app works in example mode immediately without a model account.
+Node 22.6+ required. Copy `.env.example` to `.env` and configure `OPENAI_API_KEY` and optionally `OPENAI_MODEL` for live planning. Credentials stay on the Node server. Without a key the app uses clearly labeled Example mode. The planner also has a **Use Example mode** switch for reliable demos with a key configured. Example interpretation is a limited phrase parser, never represented as model reasoning. A live failure is explicitly labeled as a calculated example.
 
-## 14. Environment variables
+If another prototype is running: `API_PORT=5184 npm run dev -- --port 5183`. API and Vite proxy use the same override. `/preview` retains the earlier two-phone presentation.
 
-For real natural-language planning, create a local `.env` from `.env.example`:
+## Flagship demo
 
-```bash
-cp .env.example .env
-```
+1. From Home, open **See what changed**, inspect dining evidence, then **Explore my options**.
+2. In the planner’s Life Happens section, choose **Unexpected expense** to populate:
+   > I have a wedding next month and need an extra $200. I don't want to cut dining because that's how I spend time with friends. Can I still reach my vacation goal?
+3. Click **Explore futures**. Inspect the structured dining protection, wedding amount/date and visible funding assumption.
+4. Compare **Keep your date**, **A balanced path**, and **Keep your lifestyle**. Select a path to change the chart, date, monthly savings, category changes and tradeoffs.
+5. Change the expense funding dropdown to see why paying from checking, reducing a contribution, and withdrawing from savings are different decisions.
+6. Follow up: **Actually, I could reduce shopping by $30, but I don't want to change my vacation date.** Wedding and dining remain; the deadline becomes fixed and the shopping adjustment is exact.
+7. Try **Actually, the wedding is in December.** The existing event changes to December instead of duplicating. **Never mind, forget the wedding expense.** removes it.
+8. Review the date, total monthly savings, expense funding, category targets and check-in preference. Explicitly activate the demo plan. Edit, pause, resume or turn it off on Active Plan.
 
-Set `OPENAI_API_KEY` privately in that file and optionally change `OPENAI_MODEL` (default `gpt-4.1-mini`). Restart the server. Do not paste secrets into the app or commit `.env`. Never use a `VITE_` prefix for this key. Live requests may incur API usage charges. `/api/config` exposes only `live` or `example`, never credentials. The presence of a key means configured, not that connectivity has been verified; a failed request visibly falls back.
+Draft exploration never changes an active plan. No money will be transferred automatically. Check-ins are saved preferences, with no actual notifications.
 
-## 15. Known limitations
+## Why AI is needed
 
-- No live API call was verified in this development environment because the running app reported Example mode and no usable model credential was available. Tests exercise the real tool loop with controlled mock Responses API messages, not a live model.
-- Browser-local storage is a demo persistence layer on the same browser/origin. It is not encrypted banking storage or cross-device sync. Clear site data for a fresh demo.
-- There is no continuous background analysis, bank integration, authorization system or scheduled notification service.
-- Current sample spending and category caps are fixed. The comparison now uses equivalent days 1–23, but does not model seasonality or merchant reimbursements. Checking buffer is checked against today's balance only and cannot guarantee future liquidity.
-- Example mode understands a limited set of dining/subscription/shopping/amount phrases. It does not understand arbitrary natural language. Live model explanations may still be wrong even when their amounts pass validation.
-- Protected categories are hard constraints; a requested monthly amount is a planning preference. Multiple protected categories or caps can leave a shortfall, which remains visible.
-- Goal dates use whole monthly steps, not exact weeks. All projections assume reductions are saved consistently.
-- No usability study or formal WCAG audit has been completed.
+The model interprets flexible language, implicit priorities, relative dates, hard deadlines, corrections and contradictions. It selects financial tools and returns a short structured explanation. It does not calculate balances, choose arbitrary savings amounts or activate anything. Direct constraint edits run the same calculations immediately without an unnecessary model call.
 
-## 16. Next steps
+The existing planning agent remains available in the manual planner. Existing evidence, transaction details, goal editing, sliders, presets, projection, review and active-plan controls remain intact.
 
-Validate the flow with people on actual phones; calibrate the timing and usefulness of proactive insights; evaluate natural-language constraints and unsafe/inconsistent model outputs against a larger test set; normalize partial-month comparisons; model cash flow and recurring commitments; add authorized bank data and reminder delivery only after research and security review.
+## Architecture
 
-## 17. AI-assisted development disclosure
+| File                                                                               | Role                                                                                                                          |
+| ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `life.ts`                                                                          | Zod life-event/constraint contracts, cents-based simulation, allocation, feasibility, validation and comparison               |
+| `life-agent.ts`                                                                    | Responses API tool loop, full-state interpretation, multi-turn updates, structured final output and explicit example fallback |
+| `LifeHappens.tsx`, `LifeConstraints.tsx`, `FuturePaths.tsx`, `ScenarioDetails.tsx` | Integrated input, editable constraints, accessible branching chart, path selection and factual transparency                   |
+| `model.ts`                                                                         | Existing domain types, extended with optional life-event path metadata                                                        |
+| `finance.ts`, `fixtures.ts`                                                        | Reused financial validation, synthetic ledger, spending baselines and goal calculations                                       |
+| `agent.ts`                                                                         | Existing goal agent and shared server-only OpenAI transport; bounded network/5xx retries                                      |
+| `server.ts`                                                                        | Existing local HTTP service plus `POST /api/life`; same origin, payload and schema checks                                     |
+| `App.tsx`, `components.tsx`                                                        | Existing journey, approval, persistence, path-aware forecast and activation validation                                        |
+| `life.test.ts`, `life.live.test.ts`                                                | Financial/agent/HTTP regression tests and opt-in real-model evaluation                                                        |
 
-AI coding tools accelerated the implementation, synthetic fixture construction, proposed architecture, interaction refinements and test authoring. The human supplied the product concept, design challenge, mobile-first priorities, visual critiques and updated brief, and directs final product judgment. Implementation and architecture proposals still require human review. The documented tests and browser checks were performed during AI-assisted development; this does not claim human usability evaluation or independent validation that has not occurred.
+No new runtime dependencies, agents, frameworks, bank connections or databases were added. Earlier vanilla JS files are retained as an unimported snapshot; `main.tsx` is the React entry point.
+
+### Structured state
+
+`LifeState` contains protected categories; one optional event `{name, amount, month, funding}`; hard/flexible deadline; optional exact shopping reduction; and optional changed target/horizon. Event month is a relative contribution checkpoint: November is `1`, December `2`, March `5` from October 23, 2026. A tomorrow deadline is `0` and cannot be met by this monthly model.
+
+`FutureScenario` extends the existing scenario with this state, planned month count, monthly balance points, and feasibility. It retains category adjustments, deterministic projection, evidence and tradeoffs. The complete selected path survives review, activation and reload. Draft constraints persist for the browser session; approved plans persist locally and are validated/recalculated on restore. Raw conversation text is not stored. Each request sends the current structured state, so corrections preserve prior context.
+
+### Agent tool contracts
+
+The tool-calling protocol follows [OpenAI’s official function-calling documentation](https://developers.openai.com/api/docs/guides/function-calling).
+
+- `get_financial_context()` returns the synthetic goal, checking balance, transactions, observed totals, caps and fixed time reference.
+- `analyze_adjustable_spending({state})` returns eligible categories and reduction limits; protected categories have zero capacity.
+- `generate_feasible_paths({state})` enforces constraints, simulates the event, generates and validates candidates, and returns structured path comparisons. It composes deterministic `simulateLifeEvent`, `validateFuture` and `comparePaths` functions rather than creating gratuitous model round trips.
+
+Live recommendations require successful context/category tools and successful path generation. JSON Schema constrains calls and final output; Zod and domain checks validate again. A premature model response is prompted to finish tool execution, with a ten-round limit. Tool errors are returned to the model for correction. The server returns its own tool-validated scenarios, never model-authored financial amounts. Numerical claims in the final model summary are replaced by neutral copy; financial numbers render from tools. Transparency shows actual executed tool names and distinguishes direct recalculation from a new AI call. No hidden reasoning is exposed.
+
+### Calculation methodology
+
+Reference date: **October 23, 2026**. Vacation Fund: **$400** saved, **$1,000** target, **March 23, 2027**, scheduled **$60/month**.
+
+Calculations use integer cents. Every month adds the scheduled contribution plus recurring category reductions. A funded event changes the contribution/balance only at its selected checkpoint:
+
+- **Checking (default, visibly labeled and editable):** expense comes from synthetic checking, preserving goal savings. Remaining checking must meet the requested buffer. This checks today's balance only; future bills and income are not forecast.
+- **Savings contribution:** reduce only that month’s contribution. Reject a path if its contribution cannot cover the entire expense; never imply a hidden withdrawal.
+- **Vacation Fund:** explicitly withdraw the one-time expense from the fund. Reject negative balances.
+
+For each candidate horizon, required monthly saving is rounded **up** to the nearest cent, then allocated across eligible Shopping → Entertainment → Subscriptions → Dining, respecting exact shopping adjustments and caps ($80/$60/$30/$120 respectively). Caps are illustrative product limits, bounded by observed spending, not model estimates of affordability. Groceries and Bills stay protected. The deadline path uses the original/requested horizon; the lifestyle path searches later dates with no new reductions beyond an exact user adjustment; a balanced path adds one month only when it offers a distinct tradeoff. A hard deadline suppresses later alternatives. No candidate is labeled feasible unless the validated projection reaches the target and funding/constraints are satisfied.
+
+With the flagship’s checking assumption, calculations produce $120/month through March, $100/month through April, or $60/month through August. These are derived from the current goal, not embedded in the UI. The chart marks the event even when its checking funding leaves the goal trajectory unchanged. Projections show monthly estimates and planned completion, not precise daily forecasts.
+
+## Verification status — October 23, 2026
+
+- `npm test`: deterministic financial, mocked agent, multi-turn, contradictions, fallback and HTTP-boundary coverage.
+- `npm run test:live`: **all A–G passed with the configured OpenAI model**, using real requests and rejecting fallback as a success. This includes protected dining; a $200 event with an explicit funding treatment; groceries/dining plus fixed deadline; an existing wedding corrected to December; contradictory dining constraints; and $10,000 by tomorrow. The seventh live check covers the full flagship plus its shopping follow-up. Live execution exposed and led to fixes for relative month interpretation, premature final responses, and transient transport failures. These results are a point-in-time check, not a guarantee of future service availability.
+- Production TypeScript/Vite build passes.
+- Actual desktop and 390px mobile browser checks cover entry, future selection, follow-up recalculation, review, activation, reload persistence and pause/resume. Browser layout checks verify no horizontal overflow.
+
+Run the live suite separately; it makes paid API calls and skips when no key is configured. `npm test` uses deterministic/mocked behavior, including explicitly forced Example mode at the new HTTP integration boundary.
+
+## Known limitations
+
+All account data is synthetic. October figures cover days 1–23 and are not normalized full-month spending estimates; the UI labels the observation period. The model can misinterpret flexible language, so constraints are inspectable/editable before activation. Example mode only understands the documented demo phrases and a small set of patterns. The prototype supports one life event, one exact category adjustment (Shopping), and up to sixty monthly checkpoints. An otherwise achievable real-world goal due tomorrow is conservatively infeasible in this monthly model. Missing expense amounts ask for clarification. Unsupported requests may require restating or editing constraints directly.
+
+No interest, investment return, income changes, future checking cash flow, real notifications or transfers are modeled. There is no authentication or production security infrastructure. API input is capped and origin-checked for local development. Chart text alternatives, keyboard controls, dialog focus handling and reduced motion are implemented; this is not a formal accessibility audit.

@@ -9,7 +9,7 @@ const host =
   process.env.HOST || arg("--host", managed ? "0.0.0.0" : "127.0.0.1");
 const api = spawn(process.execPath, ["--import", "tsx", "server.ts"], {
   stdio: "inherit",
-  env: { ...process.env, API_PORT: "5174" },
+  env: { ...process.env, API_PORT: process.env.API_PORT || "5174" },
 });
 const web = spawn(
   process.execPath,

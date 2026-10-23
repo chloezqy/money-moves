@@ -13,7 +13,7 @@ export default defineConfig({
     },
   ],
   server: {
-    proxy: { "/api": "http://127.0.0.1:5174" },
+    proxy: { "/api": `http://127.0.0.1:${process.env.API_PORT || "5174"}` },
     allowedHosts: ["terminal.local"],
   },
   build: {
