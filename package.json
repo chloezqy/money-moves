@@ -1,10 +1,25 @@
 {
-  "name": "money-moves-prototype",
+  "name": "money-moves",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test planning.test.js",
     "dev": "node dev.mjs",
-    "start": "node dev.mjs"
+    "build": "tsc --noEmit && vite build",
+    "start": "node --import tsx server.ts --production",
+    "test": "node --import tsx --test finance.test.ts agent.test.ts"
+  },
+  "dependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "tsx": "^4.19.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "typescript": "^5.8.0",
+    "vite": "^6.3.0"
   }
 }
